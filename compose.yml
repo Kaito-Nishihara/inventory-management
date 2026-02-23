@@ -1,0 +1,71 @@
+services:
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: inv-web
+    ports:
+      - "3000:3000"
+    depends_on:
+      - identity-api
+      - catalog-api
+      - order-api
+
+  identity-api:
+    build:
+      context: ./services/identity/Identity.Api
+      dockerfile: Dockerfile
+    container_name: inv-identity-api
+    ports:
+      - "5001:8080"
+    depends_on:
+      - postgres
+
+  catalog-api:
+    build:
+      context: ./services/catalog/Catalog.Api
+      dockerfile: Dockerfile
+    container_name: inv-catalog-api
+    ports:
+      - "5002:8080"
+    depends_on:
+      - postgres
+
+  order-api:
+    build:
+      context: ./services/order/Order.Api
+      dockerfile: Dockerfile
+    container_name: inv-order-api
+    ports:
+      - "5003:8080"
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16
+    container_name: inv-postgres
+    environment:
+      POSTGRES_USER: inv
+      POSTGRES_PASSWORD: invpass
+      POSTGRES_DB: invdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - inv_pgdata:/var/lib/postgresql/data
+
+  kuma:
+    image: louislam/uptime-kuma:1
+    container_name: inv-kuma
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - inv_kuma_data:/app/data
+    depends_on:
+      - identity-api
+      - catalog-api
+      - order-api
+
+volumes:
+  inv_pgdata:
+  inv_kuma_data:
