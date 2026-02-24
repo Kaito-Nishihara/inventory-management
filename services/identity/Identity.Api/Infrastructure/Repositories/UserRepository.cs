@@ -30,6 +30,17 @@ public class UserRepository(IdentityDbContext db) : IUserRepository
     }
 
     /// <summary>
+    /// IDでユーザーを取得します。
+    /// </summary>
+    /// <param name="userId">ユーザーIDです。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>ユーザー。未存在ならnullです。</returns>
+    public Task<User?> GetByIdAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return _db.Users.SingleOrDefaultAsync(x => x.Id == userId, cancellationToken);
+    }
+
+    /// <summary>
     /// ユーザーを追加して保存します。
     /// </summary>
     /// <param name="user">保存対象ユーザーです。</param>

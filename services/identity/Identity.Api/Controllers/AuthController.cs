@@ -39,9 +39,9 @@ public class AuthController(IAuthService authService) : ControllerBase
     /// <param name="cancellationToken">キャンセル用トークンです。</param>
     /// <returns>認証結果です。</returns>
     [HttpPost("login")]
-    [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(AuthTokensResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<AuthTokensResponse>> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
     {
         var result = await _authService.LoginAsync(
             new LoginCommand(request.Email, request.Password),
@@ -52,10 +52,52 @@ public class AuthController(IAuthService authService) : ControllerBase
             return Unauthorized();
         }
 
-        return Ok(new LoginResponse(result.Token));
+        return Ok(new AuthTokensResponse(result.AccessToken, result.RefreshToken));
+    }
+
+    /// <summary>
+    /// リフレッシュトークンで再発行します。
+    /// </summary>
+    /// <param name="request">再発行リクエストです。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>再発行結果です。</returns>
+    [HttpPost("refresh")]
+    [ProducesResponseType(typeof(AuthTokensResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<AuthTokensResponse>> Refresh([FromBody] RefreshRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _authService.RefreshAsync(new RefreshCommand(request.RefreshToken), cancellationToken);
+        if (result is null)
+        {
+            return Unauthorized();
+        }
+
+        return Ok(new AuthTokensResponse(result.AccessToken, result.RefreshToken));
+    }
+
+    /// <summary>
+    /// リフレッシュトークンを失効します。
+    /// </summary>
+    /// <param name="request">失効リクエストです。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>失効結果です。</returns>
+    [HttpPost("revoke")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Revoke([FromBody] RevokeRequest request, CancellationToken cancellationToken)
+    {
+        var success = await _authService.RevokeAsync(new RevokeCommand(request.RefreshToken), cancellationToken);
+        if (!success)
+        {
+            return Unauthorized();
+        }
+
+        return NoContent();
     }
 }
 
 public record RegisterRequest(string Email, string Password);
 public record LoginRequest(string Email, string Password);
-public record LoginResponse(string Token);
+public record RefreshRequest(string RefreshToken);
+public record RevokeRequest(string RefreshToken);
+public record AuthTokensResponse(string AccessToken, string RefreshToken);
