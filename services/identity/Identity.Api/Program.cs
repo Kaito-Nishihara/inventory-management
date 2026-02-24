@@ -12,6 +12,13 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy =>
+        policy.WithOrigins("http://localhost:3000")
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+});
 builder.Services.AddOpenApi();
 var useInMemoryIdentityDb = builder.Configuration.GetValue<bool>("IdentityDb:UseInMemory");
 if (useInMemoryIdentityDb)
@@ -74,12 +81,14 @@ using (var scope = app.Services.CreateScope())
     await IdentitySeed.SeedDefaultsAsync(db, passwordHasher);
 }
 
-if (app.Environment.IsDevelopment())
+var openApiEnabled = app.Configuration.GetValue<bool?>("OpenApi:Enabled") ?? true;
+if (openApiEnabled)
 {
     app.MapOpenApi();
 }
 
 app.UseHttpsRedirection();
+app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
