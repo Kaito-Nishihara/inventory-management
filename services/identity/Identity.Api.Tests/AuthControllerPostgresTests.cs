@@ -33,7 +33,7 @@ public class AuthControllerPostgresTests(PostgresIdentityApiFactory factory) : I
         await conn.OpenAsync();
 
         await using var cmd = new NpgsqlCommand(
-            "select password_hash from identity.users where email = @email",
+            "select \"PasswordHash\" from identity.users where \"Email\" = @email",
             conn);
         cmd.Parameters.AddWithValue("email", email);
         var hash = (string?)await cmd.ExecuteScalarAsync();

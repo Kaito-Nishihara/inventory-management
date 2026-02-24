@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option csharp_namespace = "Inventory.Contracts";
+
+package inventory;
+
+service InventoryGrpc {
+  rpc Reserve (ReserveInventoryRequest) returns (ReserveInventoryReply);
+}
+
+message ReserveInventoryRequest {
+  string product_id = 1;
+  int32 quantity = 2;
+}
+
+message ReserveInventoryReply {
+  bool success = 1;
+  string error_code = 2;
+}

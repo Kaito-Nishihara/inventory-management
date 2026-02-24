@@ -38,6 +38,7 @@ services:
     container_name: inv-catalog-api
     ports:
       - "5002:8080"
+      - "5004:8081"
     depends_on:
       - postgres
 

@@ -62,4 +62,17 @@ public class InventoryItem
         UpdatedAtUtc = DateTime.UtcNow;
         return true;
     }
+
+    public bool TryReserve(int quantity)
+    {
+        if (quantity <= 0 || Available < quantity)
+        {
+            return false;
+        }
+
+        Reserved += quantity;
+        Version++;
+        UpdatedAtUtc = DateTime.UtcNow;
+        return true;
+    }
 }

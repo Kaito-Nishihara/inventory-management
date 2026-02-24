@@ -25,4 +25,12 @@ public interface IInventoryService
     /// <param name="cancellationToken">キャンセル用トークンです。</param>
     /// <returns>更新結果です。</returns>
     Task<InventoryUpdateResult> AdjustAsync(AdjustInventoryCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 注文向け在庫引当を実行します。
+    /// </summary>
+    /// <param name="command">引当情報です。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>更新結果です。</returns>
+    Task<InventoryUpdateResult> ReserveAsync(ReserveInventoryCommand command, CancellationToken cancellationToken = default);
 }
