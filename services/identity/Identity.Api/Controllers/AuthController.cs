@@ -1,54 +1,49 @@
+using Identity.Api.Application.Auth;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 
 namespace Identity.Api.Controllers;
 
 [ApiController]
 [Route("auth")]
-public class AuthController : ControllerBase
+public class AuthController(IAuthService authService) : ControllerBase
 {
+    private readonly IAuthService _authService = authService;
+
+    [HttpPost("register")]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _authService.RegisterAsync(
+            new RegisterCommand(request.Email, request.Password),
+            cancellationToken);
+
+        if (result.Status == RegisterStatus.Conflict)
+        {
+            return Conflict("Email already exists");
+        }
+
+        return CreatedAtAction(nameof(Register), new { userId = result.UserId }, null);
+    }
+
     [HttpPost("login")]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public ActionResult<LoginResponse> Login([FromBody] LoginRequest request)
+    public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
     {
-        if (request.Email == "admin@test.com" && request.Password == "password")
+        var result = await _authService.LoginAsync(
+            new LoginCommand(request.Email, request.Password),
+            cancellationToken);
+
+        if (result is null)
         {
-            var token = GenerateToken("1", "admin");
-            return Ok(new LoginResponse(token));
+            return Unauthorized();
         }
 
-        if (request.Email == "user@test.com" && request.Password == "password")
-        {
-            var token = GenerateToken("2", "user");
-            return Ok(new LoginResponse(token));
-        }
-
-        return Unauthorized();
-    }
-
-    private static string GenerateToken(string userId, string role)
-    {
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier, userId),
-            new Claim(ClaimTypes.Role, role)
-        };
-
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JwtSettings.SecretKey));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var token = new JwtSecurityToken(
-            claims: claims,
-            expires: DateTime.UtcNow.AddHours(1),
-            signingCredentials: creds);
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return Ok(new LoginResponse(result.Token));
     }
 }
 
+public record RegisterRequest(string Email, string Password);
 public record LoginRequest(string Email, string Password);
 public record LoginResponse(string Token);
