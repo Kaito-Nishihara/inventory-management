@@ -5,8 +5,15 @@ namespace Identity.Api.Infrastructure;
 
 public class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : DbContext(options)
 {
+    /// <summary>
+    /// ユーザー集合です。
+    /// </summary>
     public DbSet<User> Users => Set<User>();
 
+    /// <summary>
+    /// モデル定義を構成します。
+    /// </summary>
+    /// <param name="modelBuilder">モデルビルダーです。</param>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("identity");

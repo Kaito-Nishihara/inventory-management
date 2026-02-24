@@ -9,6 +9,12 @@ public class AuthController(IAuthService authService) : ControllerBase
 {
     private readonly IAuthService _authService = authService;
 
+    /// <summary>
+    /// ユーザーを登録します。
+    /// </summary>
+    /// <param name="request">登録リクエストです。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>作成結果です。</returns>
     [HttpPost("register")]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -26,6 +32,12 @@ public class AuthController(IAuthService authService) : ControllerBase
         return CreatedAtAction(nameof(Register), new { userId = result.UserId }, null);
     }
 
+    /// <summary>
+    /// ログインしてJWTを返します。
+    /// </summary>
+    /// <param name="request">ログインリクエストです。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>認証結果です。</returns>
     [HttpPost("login")]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

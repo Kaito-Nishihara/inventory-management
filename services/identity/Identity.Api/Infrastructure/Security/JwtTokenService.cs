@@ -8,6 +8,11 @@ namespace Identity.Api.Infrastructure.Security;
 
 public class JwtTokenService : ITokenService
 {
+    /// <summary>
+    /// JWTを生成します。
+    /// </summary>
+    /// <param name="user">トークン対象ユーザーです。</param>
+    /// <returns>JWT文字列です。</returns>
     public string Generate(User user)
     {
         var claims = new[]
