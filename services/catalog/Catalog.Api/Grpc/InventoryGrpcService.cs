@@ -37,4 +37,30 @@ public class InventoryGrpcService(IInventoryService inventoryService) : Inventor
             _ => new ReserveInventoryReply { Success = false, ErrorCode = "invalid_request" }
         };
     }
+
+    /// <summary>
+    /// 注文キャンセル向け在庫返却を実行します。
+    /// </summary>
+    /// <param name="request">返却リクエストです。</param>
+    /// <param name="context">gRPC呼び出しコンテキストです。</param>
+    /// <returns>返却結果です。</returns>
+    public override async Task<ReleaseInventoryReply> Release(ReleaseInventoryRequest request, ServerCallContext context)
+    {
+        if (!Guid.TryParse(request.ProductId, out var productId))
+        {
+            return new ReleaseInventoryReply { Success = false, ErrorCode = "invalid_product_id" };
+        }
+
+        var result = await _inventoryService.ReleaseAsync(
+            new ReleaseInventoryCommand(productId, request.Quantity, "order_cancel_release"),
+            context.CancellationToken);
+
+        return result.Status switch
+        {
+            InventoryUpdateStatus.Success => new ReleaseInventoryReply { Success = true },
+            InventoryUpdateStatus.ConcurrencyConflict => new ReleaseInventoryReply { Success = false, ErrorCode = "concurrency_conflict" },
+            InventoryUpdateStatus.NotFound => new ReleaseInventoryReply { Success = false, ErrorCode = "product_not_found" },
+            _ => new ReleaseInventoryReply { Success = false, ErrorCode = "invalid_request" }
+        };
+    }
 }

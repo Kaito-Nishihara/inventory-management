@@ -50,6 +50,30 @@ public sealed class Chapter7ComposeE2ETests
         await ChangeOrderStatusAsync(client, adminToken, orderId, "accepted", HttpStatusCode.Conflict);
     }
 
+    /// <summary>
+    /// キャンセル時に在庫が返却され、再注文できることを検証します。
+    /// </summary>
+    [Fact]
+    public async Task Compose_Cancel_ReleasesInventory()
+    {
+        using var client = new HttpClient();
+
+        await AssertHealthAsync(client, $"{IdentityBaseUrl}/health");
+        await AssertHealthAsync(client, $"{CatalogBaseUrl}/health");
+        await AssertHealthAsync(client, $"{OrderBaseUrl}/health");
+
+        var adminToken = await LoginAndGetAccessTokenAsync(client, "admin@test.com", "password");
+        var userToken = await LoginAndGetAccessTokenAsync(client, "user@test.com", "password");
+
+        var productId = await CreateProductAsync(client, adminToken);
+        await ReceiveInventoryAsync(client, adminToken, productId);
+
+        var orderId = await CreateOrderAsync(client, userToken, productId, HttpStatusCode.Created);
+        await ChangeOrderStatusAsync(client, adminToken, orderId, "cancelled", HttpStatusCode.NoContent);
+
+        await CreateOrderAsync(client, userToken, productId, HttpStatusCode.Created);
+    }
+
     private static async Task AssertHealthAsync(HttpClient client, string url)
     {
         Exception? lastException = null;

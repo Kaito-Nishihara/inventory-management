@@ -75,4 +75,22 @@ public class InventoryItem
         UpdatedAtUtc = DateTime.UtcNow;
         return true;
     }
+
+    /// <summary>
+    /// 引当在庫を返却します。
+    /// </summary>
+    /// <param name="quantity">返却数量です。</param>
+    /// <returns>返却できた場合はtrueです。</returns>
+    public bool TryRelease(int quantity)
+    {
+        if (quantity <= 0 || Reserved < quantity)
+        {
+            return false;
+        }
+
+        Reserved -= quantity;
+        Version++;
+        UpdatedAtUtc = DateTime.UtcNow;
+        return true;
+    }
 }

@@ -18,5 +18,6 @@ public enum ChangeOrderStatusResult
 {
     Success,
     NotFound,
-    InvalidTransition
+    InvalidTransition,
+    InventoryReleaseFailed
 }

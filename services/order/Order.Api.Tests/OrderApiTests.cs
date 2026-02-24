@@ -18,7 +18,7 @@ public class OrderApiTests(OrderApiFactory factory) : IClassFixture<OrderApiFact
     [Fact]
     public async Task CreateOrder_Success_ReturnsCreated()
     {
-        factory.Gateway.SetResult(new ReserveResult(true, string.Empty));
+        factory.Gateway.SetReserveResult(new ReserveResult(true, string.Empty));
 
         using var client = CreateUserClient();
         var response = await client.PostAsJsonAsync("/orders", new CreateOrderRequest(Guid.NewGuid(), 2));
@@ -28,7 +28,7 @@ public class OrderApiTests(OrderApiFactory factory) : IClassFixture<OrderApiFact
     [Fact]
     public async Task CreateOrder_WhenInventoryUnavailable_ReturnsConflict()
     {
-        factory.Gateway.SetResult(new ReserveResult(false, "insufficient_available"));
+        factory.Gateway.SetReserveResult(new ReserveResult(false, "insufficient_available"));
 
         using var client = CreateUserClient();
         var response = await client.PostAsJsonAsync("/orders", new CreateOrderRequest(Guid.NewGuid(), 2));
@@ -38,7 +38,8 @@ public class OrderApiTests(OrderApiFactory factory) : IClassFixture<OrderApiFact
     [Fact]
     public async Task ChangeStatus_ValidFlow_Works_And_InvalidTransitionReturnsConflict()
     {
-        factory.Gateway.SetResult(new ReserveResult(true, string.Empty));
+        factory.Gateway.SetReserveResult(new ReserveResult(true, string.Empty));
+        factory.Gateway.SetReleaseResult(new ReleaseResult(true, string.Empty));
 
         Guid orderId;
         using (var userClient = CreateUserClient())
@@ -58,6 +59,26 @@ public class OrderApiTests(OrderApiFactory factory) : IClassFixture<OrderApiFact
 
         var invalid = await adminClient.PostAsJsonAsync($"/admin/orders/{orderId}/status", new ChangeOrderStatusRequest("accepted"));
         Assert.Equal(HttpStatusCode.Conflict, invalid.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_Cancel_RequiresInventoryRelease()
+    {
+        factory.Gateway.SetReserveResult(new ReserveResult(true, string.Empty));
+        factory.Gateway.SetReleaseResult(new ReleaseResult(false, "concurrency_conflict"));
+
+        Guid orderId;
+        using (var userClient = CreateUserClient())
+        {
+            var create = await userClient.PostAsJsonAsync("/orders", new CreateOrderRequest(Guid.NewGuid(), 1));
+            var payload = await create.Content.ReadFromJsonAsync<CreateOrderResponse>();
+            Assert.NotNull(payload);
+            orderId = payload!.OrderId;
+        }
+
+        using var adminClient = CreateAdminClient();
+        var cancel = await adminClient.PostAsJsonAsync($"/admin/orders/{orderId}/status", new ChangeOrderStatusRequest("cancelled"));
+        Assert.Equal(HttpStatusCode.Conflict, cancel.StatusCode);
     }
 
     private HttpClient CreateUserClient()
@@ -121,15 +142,26 @@ public class OrderApiFactory : WebApplicationFactory<Program>
 
 public class FakeInventoryReservationGateway : IInventoryReservationGateway
 {
-    private ReserveResult _result = new(true, string.Empty);
+    private ReserveResult _reserveResult = new(true, string.Empty);
+    private ReleaseResult _releaseResult = new(true, string.Empty);
 
-    public void SetResult(ReserveResult result)
+    public void SetReserveResult(ReserveResult result)
     {
-        _result = result;
+        _reserveResult = result;
+    }
+
+    public void SetReleaseResult(ReleaseResult result)
+    {
+        _releaseResult = result;
     }
 
     public Task<ReserveResult> ReserveAsync(Guid productId, int quantity, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(_result);
+        return Task.FromResult(_reserveResult);
+    }
+
+    public Task<ReleaseResult> ReleaseAsync(Guid productId, int quantity, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(_releaseResult);
     }
 }
