@@ -1,16 +1,33 @@
 using Catalog.Api.Application.Inventory;
 using Catalog.Api.Application.Products;
+using Catalog.Api.Grpc;
 using Catalog.Api.Infrastructure;
 using Catalog.Api.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options =>
+{
+    // REST endpoints (controllers + health)
+    options.ListenAnyIP(8080, listenOptions =>
+    {
+        listenOptions.Protocols = HttpProtocols.Http1;
+    });
+
+    // gRPC endpoint (h2c)
+    options.ListenAnyIP(8081, listenOptions =>
+    {
+        listenOptions.Protocols = HttpProtocols.Http2;
+    });
+});
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddGrpc();
 var useInMemoryCatalogDb = builder.Configuration.GetValue<bool>("CatalogDb:UseInMemory");
 if (useInMemoryCatalogDb)
 {
@@ -70,7 +87,6 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -78,6 +94,7 @@ app.MapGet("/health", () => Results.Ok("Healthy"))
     .WithName("Health");
 
 app.MapControllers();
+app.MapGrpcService<InventoryGrpcService>();
 
 app.Run();
 

@@ -3,6 +3,7 @@ namespace Catalog.Api.Application.Inventory;
 public sealed record ReceiveInventoryCommand(Guid ProductId, int Quantity, int ExpectedVersion, string? Note);
 public sealed record IssueInventoryCommand(Guid ProductId, int Quantity, int ExpectedVersion, string? Note);
 public sealed record AdjustInventoryCommand(Guid ProductId, int NewOnHand, int ExpectedVersion, string? Note);
+public sealed record ReserveInventoryCommand(Guid ProductId, int Quantity, string? Note);
 
 public enum InventoryUpdateStatus
 {
@@ -11,7 +12,8 @@ public enum InventoryUpdateStatus
     InvalidQuantity,
     InsufficientAvailable,
     VersionConflict,
-    InvalidOnHand
+    InvalidOnHand,
+    ConcurrencyConflict
 }
 
 public sealed record InventoryUpdateResult(InventoryUpdateStatus Status);

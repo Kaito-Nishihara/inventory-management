@@ -6,10 +6,16 @@ using Xunit;
 
 namespace Identity.Api.Tests;
 
+/// <summary>
+/// PostgreSQL を使用した認証統合テストです。
+/// </summary>
 public class AuthControllerPostgresTests(PostgresIdentityApiFactory factory) : IClassFixture<PostgresIdentityApiFactory>
 {
     private const string ConnectionString = "Host=localhost;Port=5432;Database=invdb;Username=inv;Password=invpass;Timeout=2";
 
+    /// <summary>
+    /// 登録時のハッシュ保存とログイン時のトークン発行を検証します。
+    /// </summary>
     [Fact]
     public async Task Register_PersistsToIdentityUsers_AndLoginReturnsJwt()
     {
@@ -33,7 +39,7 @@ public class AuthControllerPostgresTests(PostgresIdentityApiFactory factory) : I
         await conn.OpenAsync();
 
         await using var cmd = new NpgsqlCommand(
-            "select password_hash from identity.users where email = @email",
+            "select \"PasswordHash\" from identity.users where \"Email\" = @email",
             conn);
         cmd.Parameters.AddWithValue("email", email);
         var hash = (string?)await cmd.ExecuteScalarAsync();
@@ -53,6 +59,10 @@ public class AuthControllerPostgresTests(PostgresIdentityApiFactory factory) : I
         Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
     }
 
+    /// <summary>
+    /// PostgreSQL に接続可能か確認します。
+    /// </summary>
+    /// <returns>接続できる場合はtrueです。</returns>
     private static async Task<bool> CanConnectToPostgresAsync()
     {
         try
@@ -73,8 +83,15 @@ public class AuthControllerPostgresTests(PostgresIdentityApiFactory factory) : I
     public sealed record AuthTokensResponse(string AccessToken, string RefreshToken);
 }
 
+/// <summary>
+/// PostgreSQL接続で Identity API を起動するテストファクトリです。
+/// </summary>
 public class PostgresIdentityApiFactory : WebApplicationFactory<Program>
 {
+    /// <summary>
+    /// テスト用のWebHost設定を行います。
+    /// </summary>
+    /// <param name="builder">WebHostビルダーです。</param>
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
         builder.UseSetting("IdentityDb:UseInMemory", "false");

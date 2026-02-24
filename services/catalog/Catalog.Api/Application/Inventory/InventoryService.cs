@@ -1,5 +1,6 @@
 using Catalog.Api.Domain;
 using Catalog.Api.Infrastructure.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 namespace Catalog.Api.Application.Inventory;
 
@@ -123,6 +124,50 @@ public class InventoryService(IInventoryRepository inventoryRepository) : IInven
             command.Note));
 
         await _inventoryRepository.SaveChangesAsync(cancellationToken);
+        return new InventoryUpdateResult(InventoryUpdateStatus.Success);
+    }
+
+    /// <summary>
+    /// 注文向け在庫引当を行います。
+    /// </summary>
+    /// <param name="command">引当情報です。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>更新結果です。</returns>
+    public async Task<InventoryUpdateResult> ReserveAsync(ReserveInventoryCommand command, CancellationToken cancellationToken = default)
+    {
+        if (command.Quantity <= 0)
+        {
+            return new InventoryUpdateResult(InventoryUpdateStatus.InvalidQuantity);
+        }
+
+        var inventory = await _inventoryRepository.GetByProductIdAsync(command.ProductId, cancellationToken);
+        if (inventory is null)
+        {
+            return new InventoryUpdateResult(InventoryUpdateStatus.NotFound);
+        }
+
+        if (!inventory.TryReserve(command.Quantity))
+        {
+            return new InventoryUpdateResult(InventoryUpdateStatus.InsufficientAvailable);
+        }
+
+        _inventoryRepository.AddTransaction(InventoryTransaction.Create(
+            command.ProductId,
+            "reserve",
+            0,
+            inventory.OnHand,
+            inventory.Reserved,
+            command.Note));
+
+        try
+        {
+            await _inventoryRepository.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return new InventoryUpdateResult(InventoryUpdateStatus.ConcurrencyConflict);
+        }
+
         return new InventoryUpdateResult(InventoryUpdateStatus.Success);
     }
 }
