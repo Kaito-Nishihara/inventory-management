@@ -170,4 +170,48 @@ public class InventoryService(IInventoryRepository inventoryRepository) : IInven
 
         return new InventoryUpdateResult(InventoryUpdateStatus.Success);
     }
+
+    /// <summary>
+    /// 注文キャンセル向け在庫返却を行います。
+    /// </summary>
+    /// <param name="command">返却情報です。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>更新結果です。</returns>
+    public async Task<InventoryUpdateResult> ReleaseAsync(ReleaseInventoryCommand command, CancellationToken cancellationToken = default)
+    {
+        if (command.Quantity <= 0)
+        {
+            return new InventoryUpdateResult(InventoryUpdateStatus.InvalidQuantity);
+        }
+
+        var inventory = await _inventoryRepository.GetByProductIdAsync(command.ProductId, cancellationToken);
+        if (inventory is null)
+        {
+            return new InventoryUpdateResult(InventoryUpdateStatus.NotFound);
+        }
+
+        if (!inventory.TryRelease(command.Quantity))
+        {
+            return new InventoryUpdateResult(InventoryUpdateStatus.InvalidQuantity);
+        }
+
+        _inventoryRepository.AddTransaction(InventoryTransaction.Create(
+            command.ProductId,
+            "release",
+            0,
+            inventory.OnHand,
+            inventory.Reserved,
+            command.Note));
+
+        try
+        {
+            await _inventoryRepository.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return new InventoryUpdateResult(InventoryUpdateStatus.ConcurrencyConflict);
+        }
+
+        return new InventoryUpdateResult(InventoryUpdateStatus.Success);
+    }
 }

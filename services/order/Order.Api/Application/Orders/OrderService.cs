@@ -90,6 +90,18 @@ public class OrderService(IOrderRepository orderRepository, IInventoryReservatio
             return ChangeOrderStatusResult.NotFound;
         }
 
+        if (order.Status == OrderStatuses.Accepted && command.NextStatus == OrderStatuses.Cancelled)
+        {
+            foreach (var item in order.Items)
+            {
+                var release = await _inventoryGateway.ReleaseAsync(item.ProductId, item.Quantity, cancellationToken);
+                if (!release.Success)
+                {
+                    return ChangeOrderStatusResult.InventoryReleaseFailed;
+                }
+            }
+        }
+
         if (!order.TryChangeStatus(command.NextStatus))
         {
             return ChangeOrderStatusResult.InvalidTransition;

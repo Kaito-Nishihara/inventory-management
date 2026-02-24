@@ -4,6 +4,7 @@ public sealed record ReceiveInventoryCommand(Guid ProductId, int Quantity, int E
 public sealed record IssueInventoryCommand(Guid ProductId, int Quantity, int ExpectedVersion, string? Note);
 public sealed record AdjustInventoryCommand(Guid ProductId, int NewOnHand, int ExpectedVersion, string? Note);
 public sealed record ReserveInventoryCommand(Guid ProductId, int Quantity, string? Note);
+public sealed record ReleaseInventoryCommand(Guid ProductId, int Quantity, string? Note);
 
 public enum InventoryUpdateStatus
 {

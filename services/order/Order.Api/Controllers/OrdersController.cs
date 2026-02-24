@@ -115,6 +115,7 @@ public class AdminOrdersController(IOrderService orderService) : ControllerBase
         {
             ChangeOrderStatusResult.Success => NoContent(),
             ChangeOrderStatusResult.NotFound => NotFound(),
+            ChangeOrderStatusResult.InventoryReleaseFailed => Conflict("inventory_release_failed"),
             _ => Conflict("invalid_transition")
         };
     }
