@@ -1,5 +1,8 @@
 namespace Order.Api.Domain;
 
+/// <summary>
+/// 注文集約です。
+/// </summary>
 public class Order
 {
     public Guid Id { get; private set; }
@@ -11,6 +14,13 @@ public class Order
     public List<OrderItem> Items { get; private set; } = new();
     public List<OrderStatusHistory> StatusHistory { get; private set; } = new();
 
+    /// <summary>
+    /// 注文を新規作成します。
+    /// </summary>
+    /// <param name="userId">ユーザーIDです。</param>
+    /// <param name="productId">商品IDです。</param>
+    /// <param name="quantity">注文数量です。</param>
+    /// <returns>作成した注文です。</returns>
     public static Order Create(string userId, Guid productId, int quantity)
     {
         var now = DateTime.UtcNow;
@@ -28,6 +38,11 @@ public class Order
         return order;
     }
 
+    /// <summary>
+    /// 許可された遷移に従ってステータスを変更します。
+    /// </summary>
+    /// <param name="nextStatus">遷移先ステータスです。</param>
+    /// <returns>変更できた場合はtrueです。</returns>
     public bool TryChangeStatus(string nextStatus)
     {
         if (!IsValidTransition(Status, nextStatus))

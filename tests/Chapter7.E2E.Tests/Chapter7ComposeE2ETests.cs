@@ -8,6 +8,9 @@ using Xunit;
 
 namespace Chapter7.E2E.Tests;
 
+/// <summary>
+/// Docker Compose 上の Chapter 7 実通信E2Eを検証します。
+/// </summary>
 public sealed class Chapter7ComposeE2ETests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -21,6 +24,9 @@ public sealed class Chapter7ComposeE2ETests
     private static readonly string OrderBaseUrl =
         Environment.GetEnvironmentVariable("CH7_ORDER_BASE_URL") ?? "http://localhost:5003";
 
+    /// <summary>
+    /// 注文作成から在庫引当・状態遷移までのE2Eを検証します。
+    /// </summary>
     [Fact]
     public async Task Compose_GrpcFlow_Works_EndToEnd()
     {

@@ -4,12 +4,30 @@ using OrderEntity = Order.Api.Domain.Order;
 
 namespace Order.Api.Infrastructure;
 
+/// <summary>
+/// 注文サービスのDBコンテキストです。
+/// </summary>
 public class OrderDbContext(DbContextOptions<OrderDbContext> options) : DbContext(options)
 {
+    /// <summary>
+    /// 注文集合です。
+    /// </summary>
     public DbSet<OrderEntity> Orders => Set<OrderEntity>();
+
+    /// <summary>
+    /// 注文明細集合です。
+    /// </summary>
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+
+    /// <summary>
+    /// 注文ステータス履歴集合です。
+    /// </summary>
     public DbSet<OrderStatusHistory> OrderStatusHistories => Set<OrderStatusHistory>();
 
+    /// <summary>
+    /// モデル定義を構成します。
+    /// </summary>
+    /// <param name="modelBuilder">モデルビルダーです。</param>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("order");
