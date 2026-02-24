@@ -1,4 +1,14 @@
 services:
+  test-runner:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    container_name: inv-test-runner
+    working_dir: /workspace
+    profiles:
+      - test
+    volumes:
+      - ./:/workspace
+    command: ["dotnet", "test", "inventory-management.sln"]
+
   web:
     build:
       context: ./apps/web
