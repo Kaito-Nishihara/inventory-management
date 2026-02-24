@@ -21,6 +21,14 @@ public interface IUserRepository
     Task<User?> GetByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// IDでユーザーを取得します。
+    /// </summary>
+    /// <param name="userId">ユーザーIDです。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>ユーザー。未存在ならnullです。</returns>
+    Task<User?> GetByIdAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// ユーザーを保存します。
     /// </summary>
     /// <param name="user">保存対象ユーザーです。</param>

@@ -1,5 +1,6 @@
 using Identity.Api.Domain;
 using Microsoft.IdentityModel.Tokens;
+using System.Security.Cryptography;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -13,7 +14,7 @@ public class JwtTokenService : ITokenService
     /// </summary>
     /// <param name="user">トークン対象ユーザーです。</param>
     /// <returns>JWT文字列です。</returns>
-    public string Generate(User user)
+    public string GenerateAccessToken(User user)
     {
         var claims = new[]
         {
@@ -30,5 +31,26 @@ public class JwtTokenService : ITokenService
             signingCredentials: creds);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    /// <summary>
+    /// リフレッシュトークン文字列を生成します。
+    /// </summary>
+    /// <returns>平文リフレッシュトークンです。</returns>
+    public string GenerateRefreshToken()
+    {
+        var bytes = RandomNumberGenerator.GetBytes(64);
+        return Convert.ToBase64String(bytes);
+    }
+
+    /// <summary>
+    /// トークンを保存用ハッシュへ変換します。
+    /// </summary>
+    /// <param name="token">平文トークンです。</param>
+    /// <returns>SHA-256ハッシュです。</returns>
+    public string HashToken(string token)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToHexString(bytes);
     }
 }
