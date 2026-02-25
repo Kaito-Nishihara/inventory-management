@@ -1,0 +1,33 @@
+// catalog schema
+// GeneratedAtUtc: 2026-02-25T20:54:52Z
+
+Table catalog.inventory_items {
+  ProductId uuid [pk,not null]
+  OnHand integer [not null]
+  Reserved integer [not null]
+  Version integer [not null]
+  UpdatedAtUtc timestamptz [not null]
+}
+
+Table catalog.inventory_transactions {
+  Id uuid [pk,not null]
+  ProductId uuid [not null]
+  Type varchar(32) [not null]
+  QuantityDelta integer [not null]
+  OnHandAfter integer [not null]
+  ReservedAfter integer [not null]
+  Note varchar(512)
+  CreatedAtUtc timestamptz [not null]
+}
+
+Table catalog.products {
+  Id uuid [pk,not null]
+  Name varchar(200) [not null]
+  Description varchar(2000) [not null]
+  Price numeric(18,2) [not null]
+  IsPublished boolean [not null]
+  CreatedAtUtc timestamptz [not null]
+  UpdatedAtUtc timestamptz [not null]
+}
+
+Ref: catalog.inventory_items.ProductId > catalog.products.Id
