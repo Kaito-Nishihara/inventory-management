@@ -1,0 +1,29 @@
+// order schema
+// GeneratedAtUtc: 2026-02-25T20:54:52Z
+
+Table order.order_items {
+  Id uuid [pk,not null]
+  OrderId uuid [not null]
+  ProductId uuid [not null]
+  Quantity integer [not null]
+  CreatedAtUtc timestamptz [not null]
+}
+
+Table order.order_status_histories {
+  Id uuid [pk,not null]
+  OrderId uuid [not null]
+  Status varchar(32) [not null]
+  Note varchar(256) [not null]
+  CreatedAtUtc timestamptz [not null]
+}
+
+Table order.orders {
+  Id uuid [pk,not null]
+  UserId varchar(128) [not null]
+  Status varchar(32) [not null]
+  CreatedAtUtc timestamptz [not null]
+  UpdatedAtUtc timestamptz [not null]
+}
+
+Ref: order.order_items.OrderId > order.orders.Id
+Ref: order.order_status_histories.OrderId > order.orders.Id

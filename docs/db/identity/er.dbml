@@ -1,0 +1,30 @@
+// identity schema
+// GeneratedAtUtc: 2026-02-25T20:54:51Z
+
+Table identity.auth_audit_logs {
+  Id uuid [pk,not null]
+  UserId uuid
+  Action varchar(64) [not null]
+  Success boolean [not null]
+  Detail varchar(512)
+  CreatedAtUtc timestamptz [not null]
+}
+
+Table identity.refresh_tokens {
+  Id uuid [pk,not null]
+  UserId uuid [not null]
+  TokenHash text [not null]
+  ExpiresAtUtc timestamptz [not null]
+  CreatedAtUtc timestamptz [not null]
+  RevokedAtUtc timestamptz
+  ReplacedByTokenHash text
+}
+
+Table identity.users {
+  Id uuid [pk,not null]
+  Email varchar(256) [not null]
+  PasswordHash text [not null]
+  Role varchar(32) [not null]
+  CreatedAtUtc timestamptz [not null]
+}
+

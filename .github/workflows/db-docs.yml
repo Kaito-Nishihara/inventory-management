@@ -1,0 +1,96 @@
+name: db-docs
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "services/**"
+      - "scripts/db-docs/**"
+      - ".github/workflows/db-docs.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "services/**"
+      - "scripts/db-docs/**"
+      - ".github/workflows/db-docs.yml"
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: inv
+          POSTGRES_PASSWORD: invpass
+          POSTGRES_DB: invdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U inv -d invdb"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install dotnet-ef
+        run: dotnet tool install --global dotnet-ef --version "10.*"
+
+      - name: Restore solution
+        run: dotnet restore inventory-management.sln
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in {1..30}; do
+            pg_isready -h localhost -p 5432 -U inv -d invdb && exit 0
+            sleep 2
+          done
+          echo "PostgreSQL is not ready"
+          exit 1
+        env:
+          PGPASSWORD: invpass
+
+      - name: Apply Identity migrations
+        run: >
+          dotnet ef database update
+          --project services/identity/Identity.Api/Identity.Api.csproj
+          --startup-project services/identity/Identity.Api/Identity.Api.csproj
+        env:
+          ConnectionStrings__IdentityDb: Host=localhost;Port=5432;Database=invdb;Username=inv;Password=invpass
+
+      - name: Apply Catalog migrations
+        run: >
+          dotnet ef database update
+          --project services/catalog/Catalog.Api/Catalog.Api.csproj
+          --startup-project services/catalog/Catalog.Api/Catalog.Api.csproj
+        env:
+          ConnectionStrings__CatalogDb: Host=localhost;Port=5432;Database=invdb;Username=inv;Password=invpass
+
+      - name: Apply Order migrations
+        run: >
+          dotnet ef database update
+          --project services/order/Order.Api/Order.Api.csproj
+          --startup-project services/order/Order.Api/Order.Api.csproj
+        env:
+          ConnectionStrings__OrderDb: Host=localhost;Port=5432;Database=invdb;Username=inv;Password=invpass
+
+      - name: Generate markdown db docs
+        run: bash scripts/db-docs/generate-postgres-markdown.sh
+
+      - name: Upload db docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-schema-markdown
+          path: docs/db/**
