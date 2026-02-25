@@ -45,6 +45,9 @@ jobs:
       - name: Install dotnet-ef
         run: dotnet tool install --global dotnet-ef --version "10.*"
 
+      - name: Restore solution
+        run: dotnet restore inventory-management.sln
+
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
