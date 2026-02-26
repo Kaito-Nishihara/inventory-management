@@ -18,9 +18,21 @@ describe("App login", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("[]", {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    )
   })
 
-  it("stores JWT and shows success message when login succeeds", async () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("stores JWT and navigates to product list when login succeeds", async () => {
     vi.mocked(postAuthLogin).mockResolvedValue({
       data: {
         accessToken: "access-token-for-test-1234567890",
@@ -43,7 +55,12 @@ describe("App login", () => {
 
     expect(client.setConfig).toHaveBeenCalledWith({ baseUrl: "http://localhost:5001" })
     expect(localStorage.getItem("inventory.jwt")).toBe("access-token-for-test-1234567890")
-    expect(screen.getByText("ログイン成功。JWT を保存しました。")).toBeInTheDocument()
+    expect(screen.getByText("商品一覧")).toBeInTheDocument()
+    expect(globalThis.fetch).toHaveBeenCalledWith("http://localhost:5002/products", {
+      headers: {
+        Authorization: "Bearer access-token-for-test-1234567890",
+      },
+    })
   })
 
   it("shows validation error when backend returns 401", async () => {

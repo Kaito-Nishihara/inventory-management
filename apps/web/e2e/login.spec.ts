@@ -5,7 +5,7 @@ test("login succeeds and stores jwt in localStorage", async ({ page }) => {
 
   await page.getByRole("button", { name: "ログインする" }).click()
 
-  await expect(page.getByText("ログイン成功。JWT を保存しました。")).toBeVisible()
+  await expect(page.getByRole("heading", { name: "商品一覧" })).toBeVisible()
 
   const token = await page.evaluate(() => localStorage.getItem("inventory.jwt"))
   expect(token).toBeTruthy()
