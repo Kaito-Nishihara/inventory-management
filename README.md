@@ -77,3 +77,7 @@ GitHub Actions `db-docs` で PostgreSQL から定義書を生成します。
 - 形式:
   - テーブル定義: `docs/db/{schema}/tables/*.md`
   - ER図 (DBML): `docs/db/{schema}/er.dbml`
+
+## 章ドキュメント
+
+- [第10章: Catalog/Order連携のフロント導線追加](docs/chapter-10-frontend-catalog-order-flow.md)

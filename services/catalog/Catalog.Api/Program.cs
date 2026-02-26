@@ -87,6 +87,8 @@ using (var scope = app.Services.CreateScope())
     {
         await db.Database.EnsureCreatedAsync();
     }
+
+    await CatalogSeed.SeedDefaultsAsync(db);
 }
 
 if (app.Environment.IsDevelopment())
