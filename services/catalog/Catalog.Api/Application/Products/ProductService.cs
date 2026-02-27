@@ -15,7 +15,7 @@ public class ProductService(IProductRepository productRepository) : IProductServ
     /// <returns>作成した商品IDです。</returns>
     public async Task<Guid> CreateAsync(CreateProductCommand command, CancellationToken cancellationToken = default)
     {
-        var product = Product.Create(command.Name, command.Description, command.Price);
+        var product = Product.Create(command.CategoryId, command.Name, command.Description, command.Price);
         var inventory = InventoryItem.Create(product.Id);
         await _productRepository.AddWithInventoryAsync(product, inventory, cancellationToken);
         return product.Id;
@@ -35,7 +35,7 @@ public class ProductService(IProductRepository productRepository) : IProductServ
             return false;
         }
 
-        product.Update(command.Name, command.Description, command.Price);
+        product.Update(command.CategoryId, command.Name, command.Description, command.Price);
         await _productRepository.SaveChangesAsync(cancellationToken);
         return true;
     }
@@ -60,15 +60,23 @@ public class ProductService(IProductRepository productRepository) : IProductServ
     }
 
     /// <summary>
-    /// 公開商品一覧を取得します。
+    /// 公開商品一覧をページングで取得します。
     /// </summary>
+    /// <param name="query">一覧クエリです。</param>
     /// <param name="cancellationToken">キャンセル用トークンです。</param>
-    /// <returns>商品一覧です。</returns>
-    public async Task<IReadOnlyList<ProductQueryResult>> GetPublishedListAsync(CancellationToken cancellationToken = default)
+    /// <returns>商品一覧ページです。</returns>
+    public async Task<ProductListPageResult> GetPublishedListAsync(ProductListQuery query, CancellationToken cancellationToken = default)
     {
-        var pairs = await _productRepository.GetPublishedWithInventoryListAsync(cancellationToken);
-        return pairs.Select(x => new ProductQueryResult(
+        var safePage = Math.Max(1, query.Page);
+        var safePageSize = Math.Clamp(query.PageSize, 1, 100);
+        var safeQuery = query with { Page = safePage, PageSize = safePageSize };
+
+        var (pairs, totalCount) = await _productRepository.SearchPublishedWithInventoryListAsync(safeQuery, cancellationToken);
+        var items = pairs.Select(x => new ProductQueryResult(
             x.Product.Id,
+            x.Product.CategoryId,
+            x.Category.Key,
+            x.Category.Name,
             x.Product.Name,
             x.Product.Description,
             x.Product.Price,
@@ -77,6 +85,8 @@ public class ProductService(IProductRepository productRepository) : IProductServ
             x.Inventory.Reserved,
             x.Inventory.Available,
             x.Inventory.Version)).ToList();
+
+        return new ProductListPageResult(items, totalCount, safePage, safePageSize);
     }
 
     /// <summary>
@@ -95,6 +105,9 @@ public class ProductService(IProductRepository productRepository) : IProductServ
 
         return new ProductQueryResult(
             pair.Value.Product.Id,
+            pair.Value.Product.CategoryId,
+            pair.Value.Category.Key,
+            pair.Value.Category.Name,
             pair.Value.Product.Name,
             pair.Value.Product.Description,
             pair.Value.Product.Price,

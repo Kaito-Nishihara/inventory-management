@@ -23,7 +23,8 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
             BaseAddress = new Uri("https://localhost")
         });
 
-        var response = await client.PostAsJsonAsync("/admin/products", new CreateProductRequest("A", "B", 100));
+        var categoryId = await GetAnyCategoryIdAsync(client);
+        var response = await client.PostAsJsonAsync("/admin/products", new CreateProductRequest(categoryId, "A", "B", 100));
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -36,7 +37,8 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
         });
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken("2", "user"));
-        var response = await client.PostAsJsonAsync("/admin/products", new CreateProductRequest("A", "B", 100));
+        var categoryId = await GetAnyCategoryIdAsync(client);
+        var response = await client.PostAsJsonAsync("/admin/products", new CreateProductRequest(categoryId, "A", "B", 100));
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
@@ -50,7 +52,8 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken("1", "admin"));
 
-        var create = await client.PostAsJsonAsync("/admin/products", new CreateProductRequest("Keyboard", "Mechanical", 12000));
+        var categoryId = await GetAnyCategoryIdAsync(client);
+        var create = await client.PostAsJsonAsync("/admin/products", new CreateProductRequest(categoryId, "Keyboard", "Mechanical", 12000));
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
         var created = await create.Content.ReadFromJsonAsync<CreateProductResponse>();
         Assert.NotNull(created);
@@ -59,9 +62,9 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
         Assert.Equal(HttpStatusCode.NoContent, publish.StatusCode);
 
         client.DefaultRequestHeaders.Authorization = null;
-        var list = await client.GetFromJsonAsync<List<ProductResponse>>("/products");
+        var list = await client.GetFromJsonAsync<ProductListResponse>("/products?page=1&pageSize=20");
         Assert.NotNull(list);
-        Assert.Contains(list!, x => x.Id == created.ProductId);
+        Assert.Contains(list!.Items, x => x.Id == created.ProductId);
     }
 
     [Fact]
@@ -74,7 +77,8 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken("1", "admin"));
 
-        var create = await client.PostAsJsonAsync("/admin/products", new CreateProductRequest("Mouse", "Gaming", 5000));
+        var categoryId = await GetAnyCategoryIdAsync(client);
+        var create = await client.PostAsJsonAsync("/admin/products", new CreateProductRequest(categoryId, "Mouse", "Gaming", 5000));
         var created = await create.Content.ReadFromJsonAsync<CreateProductResponse>();
         Assert.NotNull(created);
 
@@ -95,7 +99,8 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken("1", "admin"));
 
-        var create = await client.PostAsJsonAsync("/admin/products", new CreateProductRequest("Display", "27-inch", 30000));
+        var categoryId = await GetAnyCategoryIdAsync(client);
+        var create = await client.PostAsJsonAsync("/admin/products", new CreateProductRequest(categoryId, "Display", "27-inch", 30000));
         var created = await create.Content.ReadFromJsonAsync<CreateProductResponse>();
         Assert.NotNull(created);
 
@@ -128,12 +133,23 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    public sealed record CreateProductRequest(string Name, string Description, decimal Price);
+    private static async Task<Guid> GetAnyCategoryIdAsync(HttpClient client)
+    {
+        var categories = await client.GetFromJsonAsync<List<CategoryResponse>>("/categories");
+        Assert.NotNull(categories);
+        var first = categories!.FirstOrDefault();
+        Assert.NotNull(first);
+        return first!.Id;
+    }
+
+    public sealed record CreateProductRequest(Guid CategoryId, string Name, string Description, decimal Price);
     public sealed record CreateProductResponse(Guid ProductId);
     public sealed record PublishProductRequest(bool IsPublished);
     public sealed record InventoryQuantityRequest(Guid ProductId, int Quantity, int ExpectedVersion, string? Note);
     public sealed record InventoryAdjustRequest(Guid ProductId, int NewOnHand, int ExpectedVersion, string? Note);
-    public sealed record ProductResponse(Guid Id, string Name, string Description, decimal Price, int OnHand, int Reserved, int Available, int Version);
+    public sealed record ProductResponse(Guid Id, Guid CategoryId, string CategoryKey, string CategoryName, string Name, string Description, decimal Price, int OnHand, int Reserved, int Available, int Version);
+    public sealed record ProductListResponse(List<ProductResponse> Items, int TotalCount, int Page, int PageSize, int TotalPages);
+    public sealed record CategoryResponse(Guid Id, string Key, string Name, int SortOrder);
 }
 
 public class CatalogApiFactory : WebApplicationFactory<Program>

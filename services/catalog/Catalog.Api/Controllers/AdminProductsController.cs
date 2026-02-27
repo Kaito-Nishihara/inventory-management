@@ -22,7 +22,7 @@ public class AdminProductsController(IProductService productService) : Controlle
     public async Task<IActionResult> CreateProduct([FromBody] CreateProductRequest request, CancellationToken cancellationToken)
     {
         var productId = await _productService.CreateAsync(
-            new CreateProductCommand(request.Name, request.Description, request.Price),
+            new CreateProductCommand(request.CategoryId, request.Name, request.Description, request.Price),
             cancellationToken);
 
         return Created($"/admin/products/{productId}", new { productId });
@@ -41,7 +41,7 @@ public class AdminProductsController(IProductService productService) : Controlle
     public async Task<IActionResult> UpdateProduct(Guid productId, [FromBody] UpdateProductRequest request, CancellationToken cancellationToken)
     {
         var updated = await _productService.UpdateAsync(
-            new UpdateProductCommand(productId, request.Name, request.Description, request.Price),
+            new UpdateProductCommand(productId, request.CategoryId, request.Name, request.Description, request.Price),
             cancellationToken);
 
         if (!updated)
@@ -77,6 +77,6 @@ public class AdminProductsController(IProductService productService) : Controlle
     }
 }
 
-public sealed record CreateProductRequest(string Name, string Description, decimal Price);
-public sealed record UpdateProductRequest(string Name, string Description, decimal Price);
+public sealed record CreateProductRequest(Guid CategoryId, string Name, string Description, decimal Price);
+public sealed record UpdateProductRequest(Guid CategoryId, string Name, string Description, decimal Price);
 public sealed record PublishProductRequest(bool IsPublished);

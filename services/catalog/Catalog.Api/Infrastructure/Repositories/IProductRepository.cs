@@ -1,4 +1,5 @@
 using Catalog.Api.Domain;
+using Catalog.Api.Application.Products;
 
 namespace Catalog.Api.Infrastructure.Repositories;
 
@@ -22,11 +23,13 @@ public interface IProductRepository
     Task<Product?> GetByIdAsync(Guid productId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 公開商品の一覧を在庫付きで取得します。
+    /// 公開商品の一覧を在庫・カテゴリ付きで検索取得します。
     /// </summary>
+    /// <param name="query">検索クエリです。</param>
     /// <param name="cancellationToken">キャンセル用トークンです。</param>
-    /// <returns>公開商品一覧です。</returns>
-    Task<IReadOnlyList<(Product Product, InventoryItem Inventory)>> GetPublishedWithInventoryListAsync(CancellationToken cancellationToken = default);
+    /// <returns>公開商品一覧と総件数です。</returns>
+    Task<(IReadOnlyList<(Product Product, InventoryItem Inventory, Category Category)> Items, int TotalCount)>
+        SearchPublishedWithInventoryListAsync(ProductListQuery query, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 公開商品を在庫付きで取得します。
@@ -34,7 +37,7 @@ public interface IProductRepository
     /// <param name="productId">商品IDです。</param>
     /// <param name="cancellationToken">キャンセル用トークンです。</param>
     /// <returns>公開商品。未存在ならnullです。</returns>
-    Task<(Product Product, InventoryItem Inventory)?> GetPublishedWithInventoryByIdAsync(Guid productId, CancellationToken cancellationToken = default);
+    Task<(Product Product, InventoryItem Inventory, Category Category)?> GetPublishedWithInventoryByIdAsync(Guid productId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 変更を保存します。

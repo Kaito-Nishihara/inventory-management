@@ -1,33 +1,15 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
+import { useCallback, useMemo, useState, type FormEvent } from "react"
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom"
 import { postAuthLogin, type LoginRequest, type PostAuthLoginResponse } from "../api/identity"
 import { client } from "../api/identity/client.gen"
+import type { CartItem, CategoryResponse, ProductListResponse, ProductResponse } from "../features/catalog/types"
 import LoginPage from "../pages/LoginPage"
+import ProductDetailPage from "../pages/ProductDetailPage"
 import ProductsPage from "../pages/ProductsPage"
 
 type LoginResponse = PostAuthLoginResponse
 
-type ProductResponse = {
-  id: string
-  name: string
-  description: string
-  price: number
-  onHand: number
-  reserved: number
-  available: number
-  version: number
-}
-
-type CartItem = {
-  productId: string
-  name: string
-  price: number
-  available: number
-  quantity: number
-}
-
 type LoginStatus = "idle" | "loading" | "success" | "error"
-type ProductStatus = "idle" | "loading" | "success" | "error"
 
 const ADMIN_EMAIL = "admin@test.com"
 const USER_EMAIL = "user@test.com"
@@ -40,9 +22,6 @@ function AppRouter() {
   const [status, setStatus] = useState<LoginStatus>("idle")
   const [error, setError] = useState<string | null>(null)
   const [tokenPreview, setTokenPreview] = useState<string | null>(null)
-  const [products, setProducts] = useState<ProductResponse[]>([])
-  const [productsStatus, setProductsStatus] = useState<ProductStatus>("idle")
-  const [productsError, setProductsError] = useState<string | null>(null)
   const [orderMessage, setOrderMessage] = useState<string | null>(null)
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false)
@@ -65,33 +44,76 @@ function AppRouter() {
   const mapApiError = useCallback((statusCode: number): string => {
     if (statusCode === 401) return "認証期限切れです。再ログインしてください。"
     if (statusCode === 403) return "この操作を実行する権限がありません。"
+    if (statusCode === 404) return "対象データが見つかりません。"
     if (statusCode === 409) return "在庫不足のため注文できません。"
     return `APIエラーが発生しました (${statusCode})`
   }, [])
 
-  const loadProducts = useCallback(
-    async (accessToken: string) => {
-      setProductsStatus("loading")
-      setProductsError(null)
+  const fetchCategories = useCallback(async (): Promise<CategoryResponse[]> => {
+    if (!token) {
+      throw new Error("JWT がありません。再ログインしてください。")
+    }
 
-      try {
-        const response = await fetch(`${catalogBaseUrl}/products`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        })
+    const response = await fetch(`${catalogBaseUrl}/categories`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
 
-        if (!response.ok) {
-          throw new Error(mapApiError(response.status))
-        }
+    if (!response.ok) {
+      throw new Error(mapApiError(response.status))
+    }
 
-        const data = (await response.json()) as ProductResponse[]
-        setProducts(data)
-        setProductsStatus("success")
-      } catch (err) {
-        setProductsStatus("error")
-        setProductsError(err instanceof Error ? err.message : "商品一覧の取得に失敗しました。")
+    return (await response.json()) as CategoryResponse[]
+  }, [catalogBaseUrl, mapApiError, token])
+
+  const fetchProductsPage = useCallback(
+    async (query: {
+      q?: string
+      categoryId?: string
+      sort?: string
+      page: number
+      pageSize: number
+    }): Promise<ProductListResponse> => {
+      if (!token) {
+        throw new Error("JWT がありません。再ログインしてください。")
       }
+
+      const params = new URLSearchParams()
+      params.set("page", String(query.page))
+      params.set("pageSize", String(query.pageSize))
+      if (query.q) params.set("q", query.q)
+      if (query.categoryId) params.set("categoryId", query.categoryId)
+      if (query.sort) params.set("sort", query.sort)
+
+      const response = await fetch(`${catalogBaseUrl}/products?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(mapApiError(response.status))
+      }
+
+      return (await response.json()) as ProductListResponse
+    },
+    [catalogBaseUrl, mapApiError, token],
+  )
+
+  const loadProductById = useCallback(
+    async (productId: string, accessToken: string) => {
+      const response = await fetch(`${catalogBaseUrl}/products/${productId}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(mapApiError(response.status))
+      }
+
+      return (await response.json()) as ProductResponse
     },
     [catalogBaseUrl, mapApiError],
   )
@@ -186,8 +208,6 @@ function AppRouter() {
       } else {
         setOrderMessage(`注文に失敗しました。${errors.join(" / ")}`)
       }
-
-      await loadProducts(token)
     } catch (err) {
       setOrderMessage(err instanceof Error ? err.message : "注文に失敗しました。")
     } finally {
@@ -237,7 +257,6 @@ function AppRouter() {
       localStorage.setItem("inventory.jwt", loginResponse.accessToken)
       setToken(loginResponse.accessToken)
       setTokenPreview(`${loginResponse.accessToken.slice(0, 22)}...${loginResponse.accessToken.slice(-18)}`)
-      await loadProducts(loginResponse.accessToken)
       setStatus("success")
       navigate("/products", { replace: true })
     } catch (err) {
@@ -249,42 +268,12 @@ function AppRouter() {
   const handleLogout = () => {
     localStorage.removeItem("inventory.jwt")
     setToken(null)
-    setProducts([])
-    setProductsStatus("idle")
-    setProductsError(null)
     setOrderMessage(null)
     setCartItems([])
     setStatus("idle")
     setTokenPreview(null)
     navigate("/login", { replace: true })
   }
-
-  useEffect(() => {
-    if (token && productsStatus === "idle") {
-      void loadProducts(token)
-    }
-  }, [token, productsStatus, loadProducts])
-
-  useEffect(() => {
-    setCartItems((prev) =>
-      prev
-        .map((item) => {
-          const latest = products.find((x) => x.id === item.productId)
-          if (!latest) {
-            return null
-          }
-
-          return {
-            ...item,
-            name: latest.name,
-            price: latest.price,
-            available: latest.available,
-            quantity: Math.min(item.quantity, Math.max(1, latest.available)),
-          }
-        })
-        .filter((x): x is CartItem => x !== null && x.available > 0),
-    )
-  }, [products])
 
   return (
     <Routes>
@@ -317,18 +306,31 @@ function AppRouter() {
         element={
           token ? (
             <ProductsPage
-              products={products}
-              productsStatus={productsStatus}
-              productsError={productsError}
               orderMessage={orderMessage}
               cartItems={cartItems}
               isCheckoutLoading={isCheckoutLoading}
-              onReload={() => void loadProducts(token)}
               onLogout={handleLogout}
               onAddToCart={handleAddToCart}
               onRemoveFromCart={handleRemoveFromCart}
               onCartQuantityChange={handleCartQuantityChange}
-              onCheckout={() => void handleCheckout()}
+              onCheckout={handleCheckout}
+              fetchCategories={fetchCategories}
+              fetchProductsPage={fetchProductsPage}
+            />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+      <Route
+        path="/products/:productId"
+        element={
+          token ? (
+            <ProductDetailPage
+              token={token}
+              onLogout={handleLogout}
+              onAddToCart={handleAddToCart}
+              fetchProductById={loadProductById}
             />
           ) : (
             <Navigate to="/login" replace />

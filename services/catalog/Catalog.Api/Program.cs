@@ -1,3 +1,4 @@
+using Catalog.Api.Application.Categories;
 using Catalog.Api.Application.Inventory;
 using Catalog.Api.Application.Products;
 using Catalog.Api.Grpc;
@@ -36,6 +37,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddOpenApi();
 builder.Services.AddGrpc();
 var useInMemoryCatalogDb = builder.Configuration.GetValue<bool>("CatalogDb:UseInMemory");
+var bulkProductCount = builder.Configuration.GetValue<int>("CatalogSeed:BulkProductCount");
 if (useInMemoryCatalogDb)
 {
     builder.Services.AddDbContext<CatalogDbContext>(options =>
@@ -47,8 +49,10 @@ else
         options.UseNpgsql(builder.Configuration.GetConnectionString("CatalogDb")));
 }
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -88,7 +92,7 @@ using (var scope = app.Services.CreateScope())
         await db.Database.EnsureCreatedAsync();
     }
 
-    await CatalogSeed.SeedDefaultsAsync(db);
+    await CatalogSeed.SeedDefaultsAsync(db, bulkProductCount);
 }
 
 if (app.Environment.IsDevelopment())
