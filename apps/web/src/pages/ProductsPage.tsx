@@ -5,7 +5,6 @@ import { buildFilterSearchParams, parseFilterState } from "../features/catalog/p
 import {
   ALL_CATEGORY_ID,
   SORT_LABELS,
-  type CartItem,
   type CategoryResponse,
   type ProductListResponse,
   type ProductResponse,
@@ -14,14 +13,9 @@ import {
 } from "../features/catalog/types"
 
 type ProductsPageProps = {
-  orderMessage: string | null
-  cartItems: CartItem[]
-  isCheckoutLoading: boolean
+  cartCount: number
   onLogout: () => void
   onAddToCart: (product: ProductResponse) => void
-  onRemoveFromCart: (productId: string) => void
-  onCartQuantityChange: (productId: string, quantity: number) => void
-  onCheckout: () => Promise<void>
   fetchCategories: () => Promise<CategoryResponse[]>
   fetchProductsPage: (query: {
     q?: string
@@ -33,21 +27,15 @@ type ProductsPageProps = {
 }
 
 function ProductsPage({
-  orderMessage,
-  cartItems,
-  isCheckoutLoading,
+  cartCount,
   onLogout,
   onAddToCart,
-  onRemoveFromCart,
-  onCartQuantityChange,
-  onCheckout,
   fetchCategories,
   fetchProductsPage,
 }: ProductsPageProps) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const [isCartOpen, setIsCartOpen] = useState(false)
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
   const [hasUnreadNotice] = useState(true)
 
@@ -59,12 +47,6 @@ function ProductsPage({
   const [totalPages, setTotalPages] = useState(0)
 
   const filterState = useMemo(() => parseFilterState(searchParams), [searchParams])
-
-  const cartSummary = useMemo(() => {
-    const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0)
-    const totalAmount = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
-    return { totalQuantity, totalAmount }
-  }, [cartItems])
 
   const loadProducts = useCallback(async () => {
     setProductsStatus("loading")
@@ -127,11 +109,6 @@ function ProductsPage({
     updateFilter({ keyword: value, page: 1 })
   }
 
-  const handleCheckoutWithReload = async () => {
-    await onCheckout()
-    await loadProducts()
-  }
-
   return (
     <main className="min-h-screen bg-zinc-900 text-zinc-100">
       <header className="sticky top-0 z-30 border-b border-zinc-700/50 bg-zinc-900/85 backdrop-blur">
@@ -145,7 +122,7 @@ function ProductsPage({
           </div>
 
           <div className="relative flex items-center gap-3">
-            <Button onClick={() => setIsCartOpen(true)}>カート ({cartSummary.totalQuantity})</Button>
+            <Button onClick={() => navigate("/checkout")}>カート ({cartCount})</Button>
             <Button aria-label="通知" size="icon" className="relative">
               <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden="true">
                 <path d="M12 2a6 6 0 0 0-6 6v3.7l-1.7 2.9A1 1 0 0 0 5.2 16h13.6a1 1 0 0 0 .9-1.4L18 11.7V8a6 6 0 0 0-6-6Zm0 20a3 3 0 0 0 2.8-2H9.2A3 3 0 0 0 12 22Z" />
@@ -228,12 +205,6 @@ function ProductsPage({
           </div>
         )}
 
-        {orderMessage && (
-          <div className="mb-4 rounded-xl border border-zinc-500/50 bg-zinc-700/45 px-4 py-3 text-sm text-zinc-100">
-            {orderMessage}
-          </div>
-        )}
-
         <div className="mb-3 text-sm text-zinc-300">
           {totalCount.toLocaleString("ja-JP")} 件中 {(products.length > 0 ? ((filterState.page - 1) * 20 + 1) : 0).toLocaleString("ja-JP")}
           -{((filterState.page - 1) * 20 + products.length).toLocaleString("ja-JP")} 件表示
@@ -294,72 +265,6 @@ function ProductsPage({
           </Button>
         </div>
       </div>
-
-      {isCartOpen && (
-        <div className="fixed inset-0 z-40">
-          <Button
-            aria-label="カートを閉じる"
-            onClick={() => setIsCartOpen(false)}
-            variant="ghost"
-            className="absolute inset-0 h-full w-full rounded-none bg-zinc-950/55 hover:bg-zinc-950/55"
-          />
-          <aside className="absolute right-0 top-0 h-full w-full max-w-xl border-l border-zinc-600/50 bg-zinc-800/92 p-5 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-white">カート</h2>
-              <Button onClick={() => setIsCartOpen(false)} size="sm">
-                閉じる
-              </Button>
-            </div>
-
-            <div className="mb-4 rounded-xl border border-zinc-600/45 bg-zinc-700/45 p-4 text-sm text-zinc-200">
-              <p>商品点数: {cartSummary.totalQuantity} 点</p>
-              <p className="mt-1 text-base font-semibold text-white">
-                合計金額: ¥{cartSummary.totalAmount.toLocaleString("ja-JP")}
-              </p>
-            </div>
-
-            <div className="space-y-3 overflow-y-auto pb-40">
-              {cartItems.length === 0 && <p className="text-sm text-zinc-300">カートは空です。</p>}
-
-              {cartItems.map((item) => (
-                <div key={item.productId} className="rounded-xl border border-zinc-600/45 bg-zinc-800/55 px-4 py-3">
-                  <p className="font-medium text-white">{item.name}</p>
-                  <p className="mt-1 text-xs text-zinc-300">
-                    単価: ¥{item.price.toLocaleString("ja-JP")} / 在庫: {item.available}
-                  </p>
-                  <p className="mt-1 text-sm text-zinc-100">小計: ¥{(item.price * item.quantity).toLocaleString("ja-JP")}</p>
-
-                  <div className="mt-3 flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={1}
-                      max={Math.max(1, item.available)}
-                      value={item.quantity}
-                      onChange={(event) => onCartQuantityChange(item.productId, Number(event.target.value))}
-                      className="w-20 rounded-lg border border-zinc-500/45 bg-zinc-900/70 px-3 py-2 text-sm text-zinc-100"
-                    />
-                    <Button onClick={() => onRemoveFromCart(item.productId)} size="sm">
-                      削除
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="absolute bottom-0 left-0 right-0 border-t border-zinc-600/50 bg-zinc-800/92 p-5">
-              <Button
-                onClick={() => void handleCheckoutWithReload()}
-                disabled={isCheckoutLoading || cartItems.length === 0}
-                variant="primary"
-                size="lg"
-                fullWidth
-              >
-                {isCheckoutLoading ? "注文処理中..." : "注文を確定"}
-              </Button>
-            </div>
-          </aside>
-        </div>
-      )}
     </main>
   )
 }

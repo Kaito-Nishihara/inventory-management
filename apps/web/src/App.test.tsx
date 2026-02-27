@@ -81,14 +81,11 @@ describe("App login", () => {
     await waitFor(() => {
       expect(screen.getByText("商品一覧")).toBeInTheDocument()
     })
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining("http://localhost:5002/products?"),
-      expect.objectContaining({
-        headers: {
-          Authorization: "Bearer access-token-for-test-1234567890",
-        },
-      }),
-    )
+    expect(globalThis.fetch).toHaveBeenCalledWith("http://localhost:5002/categories", {
+      headers: {
+        Authorization: "Bearer access-token-for-test-1234567890",
+      },
+    })
   })
 
   it("shows validation error when backend returns 401", async () => {

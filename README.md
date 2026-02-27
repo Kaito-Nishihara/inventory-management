@@ -47,6 +47,12 @@ docker compose up -d --build
 - Order API: `http://localhost:5003`
 - Uptime Kuma: `http://localhost:3001`
 
+フロント主要画面:
+
+- `/login`: ログイン
+- `/products`: 商品一覧（検索/絞り込み/カート追加）
+- `/checkout`: 注文ページ（数量調整/注文確定/結果確認）
+
 ## テスト
 
 ### .NET テスト
@@ -77,5 +83,6 @@ GitHub Actions `db-docs` で PostgreSQL から定義書を生成します。
 - 形式:
   - テーブル定義: `docs/db/{schema}/tables/*.md`
   - ER図 (DBML): `docs/db/{schema}/er.dbml`
+
 
 

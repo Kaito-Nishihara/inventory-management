@@ -3,6 +3,8 @@ import { Navigate, Route, Routes, useNavigate } from "react-router-dom"
 import { postAuthLogin, type LoginRequest, type PostAuthLoginResponse } from "../api/identity"
 import { client } from "../api/identity/client.gen"
 import type { CartItem, CategoryResponse, ProductListResponse, ProductResponse } from "../features/catalog/types"
+import type { CheckoutExecutionResult, CheckoutLineResult } from "../features/order/checkoutSummary"
+import CheckoutPage from "../pages/CheckoutPage"
 import LoginPage from "../pages/LoginPage"
 import ProductDetailPage from "../pages/ProductDetailPage"
 import ProductsPage from "../pages/ProductsPage"
@@ -22,7 +24,6 @@ function AppRouter() {
   const [status, setStatus] = useState<LoginStatus>("idle")
   const [error, setError] = useState<string | null>(null)
   const [tokenPreview, setTokenPreview] = useState<string | null>(null)
-  const [orderMessage, setOrderMessage] = useState<string | null>(null)
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false)
 
@@ -119,7 +120,6 @@ function AppRouter() {
   )
 
   const handleAddToCart = (product: ProductResponse) => {
-    setOrderMessage(null)
     setCartItems((prev) => {
       const existing = prev.find((x) => x.productId === product.id)
       if (!existing) {
@@ -161,26 +161,31 @@ function AppRouter() {
     )
   }
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (targetProductIds?: string[]): Promise<CheckoutExecutionResult> => {
     if (!token) {
-      setOrderMessage("JWT がありません。再ログインしてください。")
-      return
+      return {
+        results: [],
+        message: "JWT がありません。再ログインしてください。",
+      }
     }
 
-    if (cartItems.length === 0) {
-      setOrderMessage("カートに商品がありません。")
-      return
+    const targetItems = targetProductIds && targetProductIds.length > 0
+      ? cartItems.filter((x) => targetProductIds.includes(x.productId))
+      : cartItems
+
+    if (targetItems.length === 0) {
+      return {
+        results: [],
+        message: "対象の商品がありません。",
+      }
     }
 
     setIsCheckoutLoading(true)
-    setOrderMessage(null)
 
     try {
-      let successCount = 0
-      const failedIds = new Set<string>()
-      const errors: string[] = []
+      const results: CheckoutLineResult[] = []
 
-      for (const item of cartItems) {
+      for (const item of targetItems) {
         const response = await fetch(`${orderBaseUrl}/orders`, {
           method: "POST",
           headers: {
@@ -191,25 +196,43 @@ function AppRouter() {
         })
 
         if (!response.ok) {
-          failedIds.add(item.productId)
-          errors.push(`${item.name}: ${mapApiError(response.status)}`)
+          results.push({
+            productId: item.productId,
+            name: item.name,
+            quantity: item.quantity,
+            status: "failed",
+            message: mapApiError(response.status),
+          })
           continue
         }
 
-        successCount += 1
+        results.push({
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          status: "success",
+          message: "注文作成に成功しました。",
+        })
       }
 
-      setCartItems((prev) => prev.filter((x) => failedIds.has(x.productId)))
+      const successfulIds = new Set(results.filter((x) => x.status === "success").map((x) => x.productId))
+      setCartItems((prev) => prev.filter((x) => !successfulIds.has(x.productId)))
 
-      if (successCount > 0 && errors.length === 0) {
-        setOrderMessage(`注文を作成しました（${successCount}件）。`)
-      } else if (successCount > 0) {
-        setOrderMessage(`一部成功（${successCount}件）。失敗: ${errors.join(" / ")}`)
-      } else {
-        setOrderMessage(`注文に失敗しました。${errors.join(" / ")}`)
-      }
+      const successCount = results.filter((x) => x.status === "success").length
+      const failedCount = results.filter((x) => x.status === "failed").length
+      const message =
+        failedCount === 0
+          ? `注文を作成しました（${successCount}件）。`
+          : successCount > 0
+            ? `一部成功（成功:${successCount}件 / 失敗:${failedCount}件）`
+            : `注文に失敗しました（${failedCount}件）`
+
+      return { results, message }
     } catch (err) {
-      setOrderMessage(err instanceof Error ? err.message : "注文に失敗しました。")
+      return {
+        results: [],
+        message: err instanceof Error ? err.message : "注文に失敗しました。",
+      }
     } finally {
       setIsCheckoutLoading(false)
     }
@@ -268,7 +291,6 @@ function AppRouter() {
   const handleLogout = () => {
     localStorage.removeItem("inventory.jwt")
     setToken(null)
-    setOrderMessage(null)
     setCartItems([])
     setStatus("idle")
     setTokenPreview(null)
@@ -306,16 +328,28 @@ function AppRouter() {
         element={
           token ? (
             <ProductsPage
-              orderMessage={orderMessage}
+              cartCount={cartItems.length}
+              onLogout={handleLogout}
+              onAddToCart={handleAddToCart}
+              fetchCategories={fetchCategories}
+              fetchProductsPage={fetchProductsPage}
+            />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+      <Route
+        path="/checkout"
+        element={
+          token ? (
+            <CheckoutPage
               cartItems={cartItems}
               isCheckoutLoading={isCheckoutLoading}
               onLogout={handleLogout}
-              onAddToCart={handleAddToCart}
               onRemoveFromCart={handleRemoveFromCart}
               onCartQuantityChange={handleCartQuantityChange}
               onCheckout={handleCheckout}
-              fetchCategories={fetchCategories}
-              fetchProductsPage={fetchProductsPage}
             />
           ) : (
             <Navigate to="/login" replace />
