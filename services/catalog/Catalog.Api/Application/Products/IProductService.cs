@@ -29,9 +29,10 @@ public interface IProductService
     /// <summary>
     /// 公開商品一覧を取得します。
     /// </summary>
+    /// <param name="query">一覧クエリです。</param>
     /// <param name="cancellationToken">キャンセル用トークンです。</param>
-    /// <returns>商品一覧です。</returns>
-    Task<IReadOnlyList<ProductQueryResult>> GetPublishedListAsync(CancellationToken cancellationToken = default);
+    /// <returns>ページングされた商品一覧です。</returns>
+    Task<ProductListPageResult> GetPublishedListAsync(ProductListQuery query, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 公開商品の詳細を取得します。

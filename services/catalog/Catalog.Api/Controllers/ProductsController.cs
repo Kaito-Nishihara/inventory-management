@@ -10,16 +10,39 @@ public class ProductsController(IProductService productService) : ControllerBase
     private readonly IProductService _productService = productService;
 
     /// <summary>
-    /// 公開商品一覧を返します。
+    /// 公開商品一覧をページングで返します。
     /// </summary>
+    /// <param name="q">検索キーワードです。</param>
+    /// <param name="categoryId">カテゴリIDです。</param>
+    /// <param name="sort">ソート条件です。</param>
+    /// <param name="page">ページ番号です。</param>
+    /// <param name="pageSize">ページサイズです。</param>
     /// <param name="cancellationToken">キャンセル用トークンです。</param>
-    /// <returns>公開商品一覧です。</returns>
+    /// <returns>公開商品一覧ページです。</returns>
     [HttpGet]
-    [ProducesResponseType(typeof(IReadOnlyList<ProductResponse>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<ProductResponse>>> GetProducts(CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(ProductListResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ProductListResponse>> GetProducts(
+        [FromQuery] string? q,
+        [FromQuery] Guid? categoryId,
+        [FromQuery] string? sort,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
     {
-        var products = await _productService.GetPublishedListAsync(cancellationToken);
-        return Ok(products.Select(Map).ToList());
+        var result = await _productService.GetPublishedListAsync(
+            new ProductListQuery(q, categoryId, sort, page, pageSize),
+            cancellationToken);
+
+        var totalPages = result.TotalCount == 0
+            ? 0
+            : (int)Math.Ceiling((double)result.TotalCount / result.PageSize);
+
+        return Ok(new ProductListResponse(
+            result.Items.Select(Map).ToList(),
+            result.TotalCount,
+            result.Page,
+            result.PageSize,
+            totalPages));
     }
 
     /// <summary>
@@ -51,6 +74,9 @@ public class ProductsController(IProductService productService) : ControllerBase
     {
         return new ProductResponse(
             x.Id,
+            x.CategoryId,
+            x.CategoryKey,
+            x.CategoryName,
             x.Name,
             x.Description,
             x.Price,
@@ -63,6 +89,9 @@ public class ProductsController(IProductService productService) : ControllerBase
 
 public sealed record ProductResponse(
     Guid Id,
+    Guid CategoryId,
+    string CategoryKey,
+    string CategoryName,
     string Name,
     string Description,
     decimal Price,
@@ -70,3 +99,10 @@ public sealed record ProductResponse(
     int Reserved,
     int Available,
     int Version);
+
+public sealed record ProductListResponse(
+    IReadOnlyList<ProductResponse> Items,
+    int TotalCount,
+    int Page,
+    int PageSize,
+    int TotalPages);

@@ -18,14 +18,37 @@ describe("App login", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("[]", {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.url
+
+      if (url.includes("/categories")) {
+        return new Response("[]", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      }
+
+      if (url.includes("/products?")) {
+        return new Response(
+          JSON.stringify({
+            items: [],
+            totalCount: 0,
+            page: 1,
+            pageSize: 20,
+            totalPages: 0,
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        )
+      }
+
+      return new Response("{}", {
         status: 200,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }),
-    )
+        headers: { "Content-Type": "application/json" },
+      })
+    })
   })
 
   afterEach(() => {
@@ -55,12 +78,17 @@ describe("App login", () => {
 
     expect(client.setConfig).toHaveBeenCalledWith({ baseUrl: "http://localhost:5001" })
     expect(localStorage.getItem("inventory.jwt")).toBe("access-token-for-test-1234567890")
-    expect(screen.getByText("商品一覧")).toBeInTheDocument()
-    expect(globalThis.fetch).toHaveBeenCalledWith("http://localhost:5002/products", {
-      headers: {
-        Authorization: "Bearer access-token-for-test-1234567890",
-      },
+    await waitFor(() => {
+      expect(screen.getByText("商品一覧")).toBeInTheDocument()
     })
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("http://localhost:5002/products?"),
+      expect.objectContaining({
+        headers: {
+          Authorization: "Bearer access-token-for-test-1234567890",
+        },
+      }),
+    )
   })
 
   it("shows validation error when backend returns 401", async () => {
