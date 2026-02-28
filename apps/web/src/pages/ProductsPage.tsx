@@ -122,6 +122,7 @@ function ProductsPage({
           </div>
 
           <div className="relative flex items-center gap-3">
+            <Button onClick={() => navigate("/orders")}>注文履歴</Button>
             <Button onClick={() => navigate("/checkout")}>カート ({cartCount})</Button>
             <Button aria-label="通知" size="icon" className="relative">
               <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden="true">

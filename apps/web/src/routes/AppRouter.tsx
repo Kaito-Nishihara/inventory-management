@@ -4,8 +4,10 @@ import { postAuthLogin, type LoginRequest, type PostAuthLoginResponse } from "..
 import { client } from "../api/identity/client.gen"
 import type { CartItem, CategoryResponse, ProductListResponse, ProductResponse } from "../features/catalog/types"
 import type { CheckoutExecutionResult, CheckoutLineResult } from "../features/order/checkoutSummary"
+import type { OrderResponse } from "../features/order/types"
 import CheckoutPage from "../pages/CheckoutPage"
 import LoginPage from "../pages/LoginPage"
+import OrdersPage from "../pages/OrdersPage"
 import ProductDetailPage from "../pages/ProductDetailPage"
 import ProductsPage from "../pages/ProductsPage"
 
@@ -117,6 +119,45 @@ function AppRouter() {
       return (await response.json()) as ProductResponse
     },
     [catalogBaseUrl, mapApiError],
+  )
+
+  const fetchOrders = useCallback(async (): Promise<OrderResponse[]> => {
+    if (!token) {
+      throw new Error("JWT がありません。再ログインしてください。")
+    }
+
+    const response = await fetch(`${orderBaseUrl}/orders`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(mapApiError(response.status))
+    }
+
+    return (await response.json()) as OrderResponse[]
+  }, [mapApiError, orderBaseUrl, token])
+
+  const fetchOrderById = useCallback(
+    async (orderId: string): Promise<OrderResponse> => {
+      if (!token) {
+        throw new Error("JWT がありません。再ログインしてください。")
+      }
+
+      const response = await fetch(`${orderBaseUrl}/orders/${orderId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(mapApiError(response.status))
+      }
+
+      return (await response.json()) as OrderResponse
+    },
+    [mapApiError, orderBaseUrl, token],
   )
 
   const handleAddToCart = (product: ProductResponse) => {
@@ -351,6 +392,16 @@ function AppRouter() {
               onCartQuantityChange={handleCartQuantityChange}
               onCheckout={handleCheckout}
             />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+      <Route
+        path="/orders"
+        element={
+          token ? (
+            <OrdersPage onLogout={handleLogout} fetchOrders={fetchOrders} fetchOrderById={fetchOrderById} />
           ) : (
             <Navigate to="/login" replace />
           )

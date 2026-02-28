@@ -72,6 +72,7 @@ function CheckoutPage({
           </div>
           <div className="flex items-center gap-2">
             <Button onClick={() => navigate("/products")}>商品一覧へ戻る</Button>
+            <Button onClick={() => navigate("/orders")}>注文履歴</Button>
             <Button onClick={onLogout} variant="ghost">
               ログアウト
             </Button>
