@@ -52,6 +52,7 @@ docker compose up -d --build
 - `/login`: ログイン
 - `/products`: 商品一覧（検索/絞り込み/カート追加）
 - `/checkout`: 注文ページ（数量調整/注文確定/結果確認）
+- `/orders`: 注文履歴（一覧/詳細/状態表示）
 
 ## テスト
 
@@ -73,6 +74,20 @@ npm run test:unit
 ```bash
 cd apps/web
 npm run test:e2e
+```
+
+### ワイヤーフレーム確認（Storybook）
+
+```bash
+cd apps/web
+npm run storybook
+```
+
+静的出力:
+
+```bash
+cd apps/web
+npm run build-storybook
 ```
 
 ## DB定義書の自動生成
