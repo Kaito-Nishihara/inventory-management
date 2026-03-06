@@ -2,9 +2,17 @@ import { useCallback, useMemo, useState, type FormEvent } from "react"
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom"
 import { postAuthLogin, type LoginRequest, type PostAuthLoginResponse } from "../api/identity"
 import { client } from "../api/identity/client.gen"
+import { getRoleFromJwt } from "../features/auth/tokenRole"
 import type { CartItem, CategoryResponse, ProductListResponse, ProductResponse } from "../features/catalog/types"
 import type { CheckoutExecutionResult, CheckoutLineResult } from "../features/order/checkoutSummary"
 import type { OrderResponse } from "../features/order/types"
+import type {
+  LocationInventoryStockResponse,
+  LocationTransferCreatedResponse,
+  LocationInventoryTransferResponse,
+  StockLocationResponse,
+} from "../features/inventory/types"
+import AdminInventoryPage from "../pages/AdminInventoryPage"
 import CheckoutPage from "../pages/CheckoutPage"
 import LoginPage from "../pages/LoginPage"
 import OrdersPage from "../pages/OrdersPage"
@@ -51,6 +59,7 @@ function AppRouter() {
     if (statusCode === 409) return "在庫不足のため注文できません。"
     return `APIエラーが発生しました (${statusCode})`
   }, [])
+  const isAdmin = useMemo(() => getRoleFromJwt(token) === "admin", [token])
 
   const fetchCategories = useCallback(async (): Promise<CategoryResponse[]> => {
     if (!token) {
@@ -119,6 +128,151 @@ function AppRouter() {
       return (await response.json()) as ProductResponse
     },
     [catalogBaseUrl, mapApiError],
+  )
+
+  const fetchStockLocations = useCallback(async (): Promise<StockLocationResponse[]> => {
+    if (!token) {
+      throw new Error("JWT がありません。再ログインしてください。")
+    }
+
+    const response = await fetch(`${catalogBaseUrl}/admin/inventory/locations`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(mapApiError(response.status))
+    }
+
+    return (await response.json()) as StockLocationResponse[]
+  }, [catalogBaseUrl, mapApiError, token])
+
+  const fetchLocationStocks = useCallback(
+    async (productId: string): Promise<LocationInventoryStockResponse[]> => {
+      if (!token) {
+        throw new Error("JWT がありません。再ログインしてください。")
+      }
+
+      const response = await fetch(`${catalogBaseUrl}/admin/inventory/${productId}/location-stocks`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(mapApiError(response.status))
+      }
+
+      return (await response.json()) as LocationInventoryStockResponse[]
+    },
+    [catalogBaseUrl, mapApiError, token],
+  )
+
+  const fetchLocationTransfers = useCallback(
+    async (productId: string, take = 10): Promise<LocationInventoryTransferResponse[]> => {
+      if (!token) {
+        throw new Error("JWT がありません。再ログインしてください。")
+      }
+
+      const response = await fetch(`${catalogBaseUrl}/admin/inventory/${productId}/transfers?take=${take}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(mapApiError(response.status))
+      }
+
+      return (await response.json()) as LocationInventoryTransferResponse[]
+    },
+    [catalogBaseUrl, mapApiError, token],
+  )
+
+  const createLocationTransfer = useCallback(
+    async (draft: {
+      productId: string
+      fromLocationId: string
+      toLocationId: string
+      quantity: number
+      note?: string
+    }): Promise<{ ok: boolean; code?: string; message: string; transferId?: string }> => {
+      if (!token) {
+        return { ok: false, message: "JWT がありません。再ログインしてください。" }
+      }
+
+      const response = await fetch(`${catalogBaseUrl}/admin/inventory/transfers`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          productId: draft.productId,
+          fromLocationId: draft.fromLocationId,
+          toLocationId: draft.toLocationId,
+          quantity: draft.quantity,
+          note: draft.note ?? null,
+        }),
+      })
+
+      if (response.status === 201) {
+        const body = (await response.json()) as LocationTransferCreatedResponse
+        return { ok: true, message: "在庫移動を指示しました。", transferId: body.transferId }
+      }
+
+      const code = (await response.text()).replaceAll('"', "")
+      if (response.status === 409 && code === "insufficient_stock") {
+        return { ok: false, code, message: "移動元ロケーションの在庫が不足しています。" }
+      }
+      if (response.status === 404 && code === "location_not_found") {
+        return { ok: false, code, message: "ロケーションが見つかりません。" }
+      }
+      if (response.status === 404 && code === "product_not_found") {
+        return { ok: false, code, message: "商品が見つかりません。" }
+      }
+      if (response.status === 400 && code === "invalid_request") {
+        return { ok: false, code, message: "移動条件が不正です。" }
+      }
+      return { ok: false, code, message: mapApiError(response.status) }
+    },
+    [catalogBaseUrl, mapApiError, token],
+  )
+
+  const runTransferAction = useCallback(
+    async (transferId: string, action: "ship" | "receive" | "cancel"): Promise<{ ok: boolean; code?: string; message: string }> => {
+      if (!token) {
+        return { ok: false, message: "JWT がありません。再ログインしてください。" }
+      }
+
+      const response = await fetch(`${catalogBaseUrl}/admin/inventory/transfers/${transferId}/${action}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const message =
+          action === "ship" ? "出荷を確定しました。" : action === "receive" ? "入荷を確定しました。" : "移動指示を取消しました。"
+        return { ok: true, message }
+      }
+
+      const code = (await response.text()).replaceAll('"', "")
+      if (response.status === 404 && code === "transfer_not_found") {
+        return { ok: false, code, message: "移動指示が見つかりません。" }
+      }
+      if (response.status === 409 && code === "invalid_status") {
+        return { ok: false, code, message: "現在のステータスでは実行できません。" }
+      }
+      if (response.status === 409 && code === "insufficient_stock") {
+        return { ok: false, code, message: "移動元ロケーションの在庫が不足しています。" }
+      }
+
+      return { ok: false, code, message: mapApiError(response.status) }
+    },
+    [catalogBaseUrl, mapApiError, token],
   )
 
   const fetchOrders = useCallback(async (): Promise<OrderResponse[]> => {
@@ -370,6 +524,7 @@ function AppRouter() {
           token ? (
             <ProductsPage
               cartCount={cartItems.length}
+              isAdmin={isAdmin}
               onLogout={handleLogout}
               onAddToCart={handleAddToCart}
               fetchCategories={fetchCategories}
@@ -387,6 +542,7 @@ function AppRouter() {
             <CheckoutPage
               cartItems={cartItems}
               isCheckoutLoading={isCheckoutLoading}
+              isAdmin={isAdmin}
               onLogout={handleLogout}
               onRemoveFromCart={handleRemoveFromCart}
               onCartQuantityChange={handleCartQuantityChange}
@@ -401,7 +557,31 @@ function AppRouter() {
         path="/orders"
         element={
           token ? (
-            <OrdersPage onLogout={handleLogout} fetchOrders={fetchOrders} fetchOrderById={fetchOrderById} />
+            <OrdersPage isAdmin={isAdmin} onLogout={handleLogout} fetchOrders={fetchOrders} fetchOrderById={fetchOrderById} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+      <Route
+        path="/admin/inventory"
+        element={
+          token ? (
+            isAdmin ? (
+              <AdminInventoryPage
+                onLogout={handleLogout}
+                fetchProductsPage={fetchProductsPage}
+                fetchStockLocations={fetchStockLocations}
+                fetchLocationStocks={fetchLocationStocks}
+                fetchLocationTransfers={fetchLocationTransfers}
+                createLocationTransfer={createLocationTransfer}
+                shipLocationTransfer={(transferId) => runTransferAction(transferId, "ship")}
+                receiveLocationTransfer={(transferId) => runTransferAction(transferId, "receive")}
+                cancelLocationTransfer={(transferId) => runTransferAction(transferId, "cancel")}
+              />
+            ) : (
+              <Navigate to="/products" replace />
+            )
           ) : (
             <Navigate to="/login" replace />
           )

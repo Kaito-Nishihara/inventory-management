@@ -18,3 +18,12 @@ public enum InventoryUpdateStatus
 }
 
 public sealed record InventoryUpdateResult(InventoryUpdateStatus Status);
+public sealed record InventoryTransactionResult(
+    Guid Id,
+    Guid ProductId,
+    string Type,
+    int QuantityDelta,
+    int OnHandAfter,
+    int ReservedAfter,
+    string? Note,
+    DateTime CreatedAtUtc);

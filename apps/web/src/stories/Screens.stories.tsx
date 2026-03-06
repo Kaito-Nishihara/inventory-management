@@ -134,6 +134,7 @@ export const Products: Story = {
     <MemoryRouter>
       <ProductsPage
         cartCount={2}
+        isAdmin
         onLogout={() => {}}
         onAddToCart={() => {}}
         fetchCategories={fetchCategories}
@@ -152,6 +153,7 @@ export const Checkout: Story = {
           { productId: "p-2", name: "27インチモニター", price: 39800, available: 9, quantity: 1 },
         ]}
         isCheckoutLoading={false}
+        isAdmin
         onLogout={() => {}}
         onRemoveFromCart={() => {}}
         onCartQuantityChange={() => {}}
@@ -164,7 +166,7 @@ export const Checkout: Story = {
 export const Orders: Story = {
   render: () => (
     <MemoryRouter>
-      <OrdersPage onLogout={() => {}} fetchOrders={fetchOrders} fetchOrderById={fetchOrderById} />
+      <OrdersPage isAdmin onLogout={() => {}} fetchOrders={fetchOrders} fetchOrderById={fetchOrderById} />
     </MemoryRouter>
   ),
 }

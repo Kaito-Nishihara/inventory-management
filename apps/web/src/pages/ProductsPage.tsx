@@ -14,6 +14,7 @@ import {
 
 type ProductsPageProps = {
   cartCount: number
+  isAdmin: boolean
   onLogout: () => void
   onAddToCart: (product: ProductResponse) => void
   fetchCategories: () => Promise<CategoryResponse[]>
@@ -28,6 +29,7 @@ type ProductsPageProps = {
 
 function ProductsPage({
   cartCount,
+  isAdmin,
   onLogout,
   onAddToCart,
   fetchCategories,
@@ -122,6 +124,7 @@ function ProductsPage({
           </div>
 
           <div className="relative flex items-center gap-3">
+            {isAdmin && <Button onClick={() => navigate("/admin/inventory")}>在庫操作</Button>}
             <Button onClick={() => navigate("/orders")}>注文履歴</Button>
             <Button onClick={() => navigate("/checkout")}>カート ({cartCount})</Button>
             <Button aria-label="通知" size="icon" className="relative">

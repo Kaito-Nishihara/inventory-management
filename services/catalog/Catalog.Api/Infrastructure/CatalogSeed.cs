@@ -20,6 +20,7 @@ public static class CatalogSeed
         CancellationToken cancellationToken = default)
     {
         var categoryMap = await EnsureCategoriesAsync(db, cancellationToken);
+        var locationMap = await EnsureLocationsAsync(db, cancellationToken);
         var samples = new[]
         {
             new SampleProduct("peripherals", "メカニカルキーボード", "80%配列のメカニカルキーボード", 12800m, 25),
@@ -66,6 +67,8 @@ public static class CatalogSeed
         {
             await SeedBulkProductsAsync(db, categoryMap, bulkProductCount, cancellationToken);
         }
+
+        await EnsureLocationStocksAsync(db, locationMap, cancellationToken);
     }
 
     /// <summary>
@@ -171,6 +174,76 @@ public static class CatalogSeed
             .ToDictionaryAsync(x => x.Key, x => x.Id, cancellationToken);
     }
 
+    private static async Task<Dictionary<string, Guid>> EnsureLocationsAsync(CatalogDbContext db, CancellationToken cancellationToken)
+    {
+        var seeds = new[]
+        {
+            new LocationSeed("WH-TOKYO", "東京中央倉庫", "warehouse"),
+            new LocationSeed("STORE-SHIBUYA", "渋谷店", "store"),
+            new LocationSeed("WIP-TOKYO", "仕掛保管エリア", "wip"),
+            new LocationSeed("RETURNS-TOKYO", "返品置場", "returns"),
+        };
+
+        foreach (var seed in seeds)
+        {
+            var current = await db.StockLocations.SingleOrDefaultAsync(x => x.Code == seed.Code, cancellationToken);
+            if (current is null)
+            {
+                db.StockLocations.Add(StockLocation.Create(seed.Code, seed.Name, seed.Type));
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        return await db.StockLocations
+            .AsNoTracking()
+            .Where(x => x.IsActive)
+            .ToDictionaryAsync(x => x.Code, x => x.Id, cancellationToken);
+    }
+
+    private static async Task EnsureLocationStocksAsync(
+        CatalogDbContext db,
+        IReadOnlyDictionary<string, Guid> locationMap,
+        CancellationToken cancellationToken)
+    {
+        if (!locationMap.TryGetValue("WH-TOKYO", out var primaryWarehouseId))
+        {
+            return;
+        }
+
+        var inventories = await db.InventoryItems
+            .AsNoTracking()
+            .Select(x => new { x.ProductId, x.OnHand })
+            .ToListAsync(cancellationToken);
+
+        if (inventories.Count == 0)
+        {
+            return;
+        }
+
+        var targetProductIds = inventories.Select(x => x.ProductId).ToHashSet();
+        var existing = await db.LocationInventoryItems
+            .AsNoTracking()
+            .Where(x => x.LocationId == primaryWarehouseId && targetProductIds.Contains(x.ProductId))
+            .Select(x => x.ProductId)
+            .ToListAsync(cancellationToken);
+        var existingSet = existing.ToHashSet();
+
+        var creates = inventories
+            .Where(x => !existingSet.Contains(x.ProductId))
+            .Select(x => LocationInventoryItem.Create(x.ProductId, primaryWarehouseId, x.OnHand))
+            .ToList();
+
+        if (creates.Count == 0)
+        {
+            return;
+        }
+
+        db.LocationInventoryItems.AddRange(creates);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     private sealed record CategorySeed(string Key, string Name, int SortOrder);
+    private sealed record LocationSeed(string Code, string Name, string Type);
     private sealed record SampleProduct(string CategoryKey, string Name, string Description, decimal Price, int OnHand);
 }

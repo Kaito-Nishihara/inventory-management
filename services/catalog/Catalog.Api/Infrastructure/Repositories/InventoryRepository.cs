@@ -28,6 +28,27 @@ public class InventoryRepository(CatalogDbContext db) : IInventoryRepository
     }
 
     /// <summary>
+    /// 商品単位の在庫履歴を新しい順で取得します。
+    /// </summary>
+    /// <param name="productId">商品IDです。</param>
+    /// <param name="take">取得件数です。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>在庫履歴です。</returns>
+    public async Task<IReadOnlyList<InventoryTransaction>> GetTransactionsByProductIdAsync(
+        Guid productId,
+        int take = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var safeTake = Math.Clamp(take, 1, 100);
+        return await _db.InventoryTransactions
+            .AsNoTracking()
+            .Where(x => x.ProductId == productId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Take(safeTake)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
     /// 変更を保存します。
     /// </summary>
     /// <param name="cancellationToken">キャンセル用トークンです。</param>

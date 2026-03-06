@@ -53,6 +53,7 @@ docker compose up -d --build
 - `/products`: 商品一覧（検索/絞り込み/カート追加）
 - `/checkout`: 注文ページ（数量調整/注文確定/結果確認）
 - `/orders`: 注文履歴（一覧/詳細/状態表示）
+- `/admin/inventory`: 在庫操作（管理者専用）
 
 ## テスト
 

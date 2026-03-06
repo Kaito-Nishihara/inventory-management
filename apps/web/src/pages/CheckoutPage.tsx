@@ -13,6 +13,7 @@ import {
 type CheckoutPageProps = {
   cartItems: CartItem[]
   isCheckoutLoading: boolean
+  isAdmin: boolean
   onLogout: () => void
   onRemoveFromCart: (productId: string) => void
   onCartQuantityChange: (productId: string, quantity: number) => void
@@ -22,6 +23,7 @@ type CheckoutPageProps = {
 function CheckoutPage({
   cartItems,
   isCheckoutLoading,
+  isAdmin,
   onLogout,
   onRemoveFromCart,
   onCartQuantityChange,
@@ -72,6 +74,7 @@ function CheckoutPage({
           </div>
           <div className="flex items-center gap-2">
             <Button onClick={() => navigate("/products")}>商品一覧へ戻る</Button>
+            {isAdmin && <Button onClick={() => navigate("/admin/inventory")}>在庫操作</Button>}
             <Button onClick={() => navigate("/orders")}>注文履歴</Button>
             <Button onClick={onLogout} variant="ghost">
               ログアウト

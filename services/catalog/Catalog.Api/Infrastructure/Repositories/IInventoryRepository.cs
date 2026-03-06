@@ -19,6 +19,18 @@ public interface IInventoryRepository
     void AddTransaction(InventoryTransaction transaction);
 
     /// <summary>
+    /// 商品単位の在庫履歴を新しい順で取得します。
+    /// </summary>
+    /// <param name="productId">商品IDです。</param>
+    /// <param name="take">取得件数です。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>在庫履歴です。</returns>
+    Task<IReadOnlyList<InventoryTransaction>> GetTransactionsByProductIdAsync(
+        Guid productId,
+        int take = 20,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 変更を保存します。
     /// </summary>
     /// <param name="cancellationToken">キャンセル用トークンです。</param>
