@@ -5,12 +5,13 @@ import { getOrderStatusMeta } from "../features/order/orderStatus"
 import type { OrderResponse } from "../features/order/types"
 
 type OrdersPageProps = {
+  isAdmin: boolean
   onLogout: () => void
   fetchOrders: () => Promise<OrderResponse[]>
   fetchOrderById: (orderId: string) => Promise<OrderResponse>
 }
 
-function OrdersPage({ onLogout, fetchOrders, fetchOrderById }: OrdersPageProps) {
+function OrdersPage({ isAdmin, onLogout, fetchOrders, fetchOrderById }: OrdersPageProps) {
   const navigate = useNavigate()
   const [orders, setOrders] = useState<OrderResponse[]>([])
   const [listStatus, setListStatus] = useState<"loading" | "success" | "error">("loading")
@@ -69,6 +70,7 @@ function OrdersPage({ onLogout, fetchOrders, fetchOrderById }: OrdersPageProps) 
           <div className="flex items-center gap-2">
             <Button onClick={() => navigate("/products")}>商品一覧</Button>
             <Button onClick={() => navigate("/checkout")}>注文ページ</Button>
+            {isAdmin && <Button onClick={() => navigate("/admin/inventory")}>在庫操作</Button>}
             <Button onClick={onLogout} variant="ghost">
               ログアウト
             </Button>

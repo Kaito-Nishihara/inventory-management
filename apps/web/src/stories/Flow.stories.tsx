@@ -194,6 +194,7 @@ function StoryFlowApp() {
           token ? (
             <ProductsPage
               cartCount={cartItems.length}
+              isAdmin
               onLogout={handleLogout}
               onAddToCart={handleAddToCart}
               fetchCategories={fetchCategories}
@@ -221,6 +222,7 @@ function StoryFlowApp() {
             <CheckoutPage
               cartItems={cartItems}
               isCheckoutLoading={isCheckoutLoading}
+              isAdmin
               onLogout={handleLogout}
               onRemoveFromCart={handleRemoveFromCart}
               onCartQuantityChange={handleCartQuantityChange}
@@ -236,6 +238,7 @@ function StoryFlowApp() {
         element={
           token ? (
             <OrdersPage
+              isAdmin
               onLogout={handleLogout}
               fetchOrders={async () => orders}
               fetchOrderById={fetchOrderById}

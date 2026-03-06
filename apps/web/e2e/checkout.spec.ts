@@ -133,7 +133,7 @@ test("checkout page updates total amount when quantity changes", async ({ page }
   await page.getByRole("button", { name: "カートに追加" }).first().click()
   await page.getByRole("button", { name: "カート (1)" }).click()
 
-  await expect(page.getByText("¥3,000")).toBeVisible()
+  await expect(page.getByText("¥3,000", { exact: true })).toBeVisible()
   await page.getByLabel("数量").fill("2")
   await expect(page.getByText("¥6,000")).toBeVisible()
 })
