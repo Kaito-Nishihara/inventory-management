@@ -116,7 +116,9 @@ public class AdminInventoryController(IInventoryService inventoryService) : Cont
             x.LocationName,
             x.LocationType,
             x.OnHand,
-            x.Version)).ToList());
+            x.Version,
+            x.InTransitOut,
+            x.InTransitIn)).ToList());
     }
 
     /// <summary>
@@ -262,7 +264,9 @@ public sealed record LocationInventoryStockResponse(
     string LocationName,
     string LocationType,
     int OnHand,
-    int Version);
+    int Version,
+    int InTransitOut,
+    int InTransitIn);
 public sealed record TransferLocationInventoryRequest(
     Guid ProductId,
     Guid FromLocationId,

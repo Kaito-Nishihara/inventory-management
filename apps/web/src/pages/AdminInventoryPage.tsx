@@ -92,6 +92,8 @@ function AdminInventoryPage({
   }, [locations])
 
   const totalOnHand = useMemo(() => stocks.reduce((sum, item) => sum + item.onHand, 0), [stocks])
+  const totalInTransitOut = useMemo(() => stocks.reduce((sum, item) => sum + item.inTransitOut, 0), [stocks])
+  const totalInTransitIn = useMemo(() => stocks.reduce((sum, item) => sum + item.inTransitIn, 0), [stocks])
   const warehouseOptions = useMemo(() => locations.filter((x) => x.type === "warehouse"), [locations])
   const nonWarehouseOptions = useMemo(() => locations.filter((x) => x.type !== "warehouse"), [locations])
 
@@ -290,7 +292,9 @@ function AdminInventoryPage({
                 <p className="text-sm text-zinc-300">
                   対象商品: <span className="font-semibold text-zinc-100">{selectedProduct.name}</span>
                 </p>
-                <p className="text-xs text-zinc-400">ロケーション合計在庫: {totalOnHand}</p>
+                <p className="text-xs text-zinc-400">
+                  ロケーション合計在庫: {totalOnHand} / 移動中出荷: {totalInTransitOut} / 移動中入荷: {totalInTransitIn}
+                </p>
                 {isLoadingStocks ? (
                   <p className="mt-3 text-sm text-zinc-300">ロケーション在庫を読み込み中...</p>
                 ) : (
@@ -301,7 +305,7 @@ function AdminInventoryPage({
                           {stock.locationName} ({stock.locationCode}) / {stock.locationType}
                         </p>
                         <p className="text-xs text-zinc-400">
-                          在庫: {stock.onHand} / Version: {stock.version}
+                          在庫: {stock.onHand} / 移動中出荷: {stock.inTransitOut} / 移動中入荷: {stock.inTransitIn} / Version: {stock.version}
                         </p>
                       </div>
                     ))}

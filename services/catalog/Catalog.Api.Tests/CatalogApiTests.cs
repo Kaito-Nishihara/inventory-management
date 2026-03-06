@@ -157,15 +157,27 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
         Assert.Equal(HttpStatusCode.NoContent, ship.StatusCode);
         var afterShip = await client.GetFromJsonAsync<List<LocationInventoryStockResponse>>($"/admin/inventory/{product.Id}/location-stocks");
         Assert.NotNull(afterShip);
-        Assert.Equal(beforeWarehouse - 2, afterShip!.Single(x => x.LocationId == from.Id).OnHand);
-        Assert.Equal(beforeStore, afterShip.Single(x => x.LocationId == to.Id).OnHand);
+        var afterShipFrom = afterShip!.Single(x => x.LocationId == from.Id);
+        var afterShipTo = afterShip.Single(x => x.LocationId == to.Id);
+        Assert.Equal(beforeWarehouse - 2, afterShipFrom.OnHand);
+        Assert.Equal(beforeStore, afterShipTo.OnHand);
+        Assert.Equal(2, afterShipFrom.InTransitOut);
+        Assert.Equal(0, afterShipFrom.InTransitIn);
+        Assert.Equal(0, afterShipTo.InTransitOut);
+        Assert.Equal(2, afterShipTo.InTransitIn);
 
         var receive = await client.PostAsync($"/admin/inventory/transfers/{created.TransferId}/receive", null);
         Assert.Equal(HttpStatusCode.NoContent, receive.StatusCode);
         var afterReceive = await client.GetFromJsonAsync<List<LocationInventoryStockResponse>>($"/admin/inventory/{product.Id}/location-stocks");
         Assert.NotNull(afterReceive);
-        Assert.Equal(beforeWarehouse - 2, afterReceive!.Single(x => x.LocationId == from.Id).OnHand);
-        Assert.Equal(beforeStore + 2, afterReceive.Single(x => x.LocationId == to.Id).OnHand);
+        var afterReceiveFrom = afterReceive!.Single(x => x.LocationId == from.Id);
+        var afterReceiveTo = afterReceive.Single(x => x.LocationId == to.Id);
+        Assert.Equal(beforeWarehouse - 2, afterReceiveFrom.OnHand);
+        Assert.Equal(beforeStore + 2, afterReceiveTo.OnHand);
+        Assert.Equal(0, afterReceiveFrom.InTransitOut);
+        Assert.Equal(0, afterReceiveFrom.InTransitIn);
+        Assert.Equal(0, afterReceiveTo.InTransitOut);
+        Assert.Equal(0, afterReceiveTo.InTransitIn);
     }
 
     private static string GenerateToken(string userId, string role)
@@ -205,7 +217,15 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
     public sealed record ProductListResponse(List<ProductResponse> Items, int TotalCount, int Page, int PageSize, int TotalPages);
     public sealed record CategoryResponse(Guid Id, string Key, string Name, int SortOrder);
     public sealed record StockLocationResponse(Guid Id, string Code, string Name, string Type);
-    public sealed record LocationInventoryStockResponse(Guid LocationId, string LocationCode, string LocationName, string LocationType, int OnHand, int Version);
+    public sealed record LocationInventoryStockResponse(
+        Guid LocationId,
+        string LocationCode,
+        string LocationName,
+        string LocationType,
+        int OnHand,
+        int Version,
+        int InTransitOut,
+        int InTransitIn);
     public sealed record LocationTransferRequest(Guid ProductId, Guid FromLocationId, Guid ToLocationId, int Quantity, string? Note);
     public sealed record LocationTransferCreatedResponse(Guid TransferId);
 }
