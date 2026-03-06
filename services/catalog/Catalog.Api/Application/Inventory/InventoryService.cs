@@ -263,6 +263,18 @@ public class InventoryService(
         CancellationToken cancellationToken = default)
     {
         var rows = await _locationInventoryRepository.GetStocksByProductIdAsync(productId, cancellationToken);
+        var transfers = await _locationInventoryRepository.GetTransfersByProductIdAsync(productId, 200, cancellationToken);
+        var inTransit = transfers
+            .Where(x => x.Status == LocationInventoryTransfer.StatusShipped)
+            .ToList();
+
+        var inTransitOutByLocation = inTransit
+            .GroupBy(x => x.FromLocationId)
+            .ToDictionary(x => x.Key, x => x.Sum(y => y.Quantity));
+        var inTransitInByLocation = inTransit
+            .GroupBy(x => x.ToLocationId)
+            .ToDictionary(x => x.Key, x => x.Sum(y => y.Quantity));
+
         return rows
             .Select(x => new LocationInventoryStockResult(
                 x.Location.Id,
@@ -270,7 +282,9 @@ public class InventoryService(
                 x.Location.Name,
                 x.Location.Type,
                 x.Stock?.OnHand ?? 0,
-                x.Stock?.Version ?? 0))
+                x.Stock?.Version ?? 0,
+                inTransitOutByLocation.GetValueOrDefault(x.Location.Id, 0),
+                inTransitInByLocation.GetValueOrDefault(x.Location.Id, 0)))
             .ToList();
     }
 

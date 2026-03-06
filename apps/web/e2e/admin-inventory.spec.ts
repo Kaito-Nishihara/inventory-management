@@ -98,6 +98,8 @@ test("admin can create and progress transfer status", async ({ page }) => {
           locationType: "warehouse",
           onHand: warehouseOnHand,
           version: 1,
+          inTransitOut: transferStatus === "出荷済み" ? 2 : 0,
+          inTransitIn: 0,
         },
         {
           locationId: store,
@@ -106,6 +108,8 @@ test("admin can create and progress transfer status", async ({ page }) => {
           locationType: "store",
           onHand: storeOnHand,
           version: 1,
+          inTransitOut: 0,
+          inTransitIn: transferStatus === "出荷済み" ? 2 : 0,
         },
       ]),
     })

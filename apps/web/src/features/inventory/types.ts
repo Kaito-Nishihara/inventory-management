@@ -23,6 +23,8 @@ export type LocationInventoryStockResponse = {
   locationType: string
   onHand: number
   version: number
+  inTransitOut: number
+  inTransitIn: number
 }
 
 export type LocationInventoryTransferResponse = {
