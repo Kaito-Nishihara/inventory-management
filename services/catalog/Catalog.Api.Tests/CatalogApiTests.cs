@@ -114,6 +114,60 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
         Assert.Equal(HttpStatusCode.Conflict, staleIssue.StatusCode);
     }
 
+    [Fact]
+    public async Task LocationInventory_TransferWorkflow_UpdatesStocksOnShipAndReceive()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken("1", "admin"));
+
+        var products = await client.GetFromJsonAsync<ProductListResponse>("/products?page=1&pageSize=20");
+        Assert.NotNull(products);
+        var product = products!.Items.First();
+
+        var locations = await client.GetFromJsonAsync<List<StockLocationResponse>>("/admin/inventory/locations");
+        Assert.NotNull(locations);
+        var from = locations!.Single(x => x.Type == "warehouse");
+        var to = locations.Single(x => x.Type == "store");
+
+        var before = await client.GetFromJsonAsync<List<LocationInventoryStockResponse>>($"/admin/inventory/{product.Id}/location-stocks");
+        Assert.NotNull(before);
+        var beforeWarehouse = before!.Single(x => x.LocationId == from.Id).OnHand;
+        var beforeStore = before.Single(x => x.LocationId == to.Id).OnHand;
+
+        var create = await client.PostAsJsonAsync("/admin/inventory/transfers", new LocationTransferRequest(
+            product.Id,
+            from.Id,
+            to.Id,
+            2,
+            "店舗補充"));
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var created = await create.Content.ReadFromJsonAsync<LocationTransferCreatedResponse>();
+        Assert.NotNull(created);
+
+        var afterCreate = await client.GetFromJsonAsync<List<LocationInventoryStockResponse>>($"/admin/inventory/{product.Id}/location-stocks");
+        Assert.NotNull(afterCreate);
+        Assert.Equal(beforeWarehouse, afterCreate!.Single(x => x.LocationId == from.Id).OnHand);
+        Assert.Equal(beforeStore, afterCreate.Single(x => x.LocationId == to.Id).OnHand);
+
+        var ship = await client.PostAsync($"/admin/inventory/transfers/{created!.TransferId}/ship", null);
+        Assert.Equal(HttpStatusCode.NoContent, ship.StatusCode);
+        var afterShip = await client.GetFromJsonAsync<List<LocationInventoryStockResponse>>($"/admin/inventory/{product.Id}/location-stocks");
+        Assert.NotNull(afterShip);
+        Assert.Equal(beforeWarehouse - 2, afterShip!.Single(x => x.LocationId == from.Id).OnHand);
+        Assert.Equal(beforeStore, afterShip.Single(x => x.LocationId == to.Id).OnHand);
+
+        var receive = await client.PostAsync($"/admin/inventory/transfers/{created.TransferId}/receive", null);
+        Assert.Equal(HttpStatusCode.NoContent, receive.StatusCode);
+        var afterReceive = await client.GetFromJsonAsync<List<LocationInventoryStockResponse>>($"/admin/inventory/{product.Id}/location-stocks");
+        Assert.NotNull(afterReceive);
+        Assert.Equal(beforeWarehouse - 2, afterReceive!.Single(x => x.LocationId == from.Id).OnHand);
+        Assert.Equal(beforeStore + 2, afterReceive.Single(x => x.LocationId == to.Id).OnHand);
+    }
+
     private static string GenerateToken(string userId, string role)
     {
         var claims = new[]
@@ -150,6 +204,10 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
     public sealed record ProductResponse(Guid Id, Guid CategoryId, string CategoryKey, string CategoryName, string Name, string Description, decimal Price, int OnHand, int Reserved, int Available, int Version);
     public sealed record ProductListResponse(List<ProductResponse> Items, int TotalCount, int Page, int PageSize, int TotalPages);
     public sealed record CategoryResponse(Guid Id, string Key, string Name, int SortOrder);
+    public sealed record StockLocationResponse(Guid Id, string Code, string Name, string Type);
+    public sealed record LocationInventoryStockResponse(Guid LocationId, string LocationCode, string LocationName, string LocationType, int OnHand, int Version);
+    public sealed record LocationTransferRequest(Guid ProductId, Guid FromLocationId, Guid ToLocationId, int Quantity, string? Note);
+    public sealed record LocationTransferCreatedResponse(Guid TransferId);
 }
 
 public class CatalogApiFactory : WebApplicationFactory<Program>

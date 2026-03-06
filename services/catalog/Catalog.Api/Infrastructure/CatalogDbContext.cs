@@ -24,6 +24,9 @@ public class CatalogDbContext(DbContextOptions<CatalogDbContext> options) : DbCo
     /// 在庫履歴集合です。
     /// </summary>
     public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
+    public DbSet<StockLocation> StockLocations => Set<StockLocation>();
+    public DbSet<LocationInventoryItem> LocationInventoryItems => Set<LocationInventoryItem>();
+    public DbSet<LocationInventoryTransfer> LocationInventoryTransfers => Set<LocationInventoryTransfer>();
 
     /// <summary>
     /// モデル定義を構成します。
@@ -82,6 +85,45 @@ public class CatalogDbContext(DbContextOptions<CatalogDbContext> options) : DbCo
             entity.Property(x => x.CreatedAtUtc).IsRequired();
             entity.HasIndex(x => x.ProductId);
             entity.HasIndex(x => x.CreatedAtUtc);
+        });
+
+        modelBuilder.Entity<StockLocation>(entity =>
+        {
+            entity.ToTable("stock_locations");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Code).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.Type).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.IsActive).IsRequired();
+            entity.Property(x => x.CreatedAtUtc).IsRequired();
+            entity.HasIndex(x => x.Code).IsUnique();
+        });
+
+        modelBuilder.Entity<LocationInventoryItem>(entity =>
+        {
+            entity.ToTable("location_inventory_items");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Version).IsConcurrencyToken();
+            entity.Property(x => x.UpdatedAtUtc).IsRequired();
+            entity.HasIndex(x => new { x.ProductId, x.LocationId }).IsUnique();
+            entity.HasIndex(x => x.LocationId);
+            entity.HasIndex(x => x.ProductId);
+        });
+
+        modelBuilder.Entity<LocationInventoryTransfer>(entity =>
+        {
+            entity.ToTable("location_inventory_transfers");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            entity.Property(x => x.Note).HasMaxLength(512);
+            entity.Property(x => x.CreatedAtUtc).IsRequired();
+            entity.Property(x => x.ShippedAtUtc);
+            entity.Property(x => x.ReceivedAtUtc);
+            entity.HasIndex(x => x.ProductId);
+            entity.HasIndex(x => x.FromLocationId);
+            entity.HasIndex(x => x.ToLocationId);
+            entity.HasIndex(x => x.CreatedAtUtc);
+            entity.HasIndex(x => x.Status);
         });
     }
 }

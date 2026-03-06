@@ -69,6 +69,143 @@ public class AdminInventoryController(IInventoryService inventoryService) : Cont
     }
 
     /// <summary>
+    /// 商品単位の在庫履歴を取得します。
+    /// </summary>
+    /// <param name="productId">商品IDです。</param>
+    /// <param name="take">取得件数です。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>在庫履歴です。</returns>
+    [HttpGet("{productId:guid}/transactions")]
+    [ProducesResponseType(typeof(IReadOnlyList<InventoryTransactionResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListTransactions(Guid productId, [FromQuery] int take = 20, CancellationToken cancellationToken = default)
+    {
+        var rows = await _inventoryService.GetTransactionsAsync(productId, take, cancellationToken);
+        return Ok(rows.Select(x => new InventoryTransactionResponse(
+            x.Id,
+            x.ProductId,
+            x.Type,
+            x.QuantityDelta,
+            x.OnHandAfter,
+            x.ReservedAfter,
+            x.Note,
+            x.CreatedAtUtc)).ToList());
+    }
+
+    /// <summary>
+    /// 有効なロケーション一覧を取得します。
+    /// </summary>
+    [HttpGet("locations")]
+    [ProducesResponseType(typeof(IReadOnlyList<StockLocationResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListLocations(CancellationToken cancellationToken = default)
+    {
+        var rows = await _inventoryService.GetLocationsAsync(cancellationToken);
+        return Ok(rows.Select(x => new StockLocationResponse(x.Id, x.Code, x.Name, x.Type)).ToList());
+    }
+
+    /// <summary>
+    /// 商品単位のロケーション別在庫を取得します。
+    /// </summary>
+    [HttpGet("{productId:guid}/location-stocks")]
+    [ProducesResponseType(typeof(IReadOnlyList<LocationInventoryStockResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListLocationStocks(Guid productId, CancellationToken cancellationToken = default)
+    {
+        var rows = await _inventoryService.GetLocationStocksAsync(productId, cancellationToken);
+        return Ok(rows.Select(x => new LocationInventoryStockResponse(
+            x.LocationId,
+            x.LocationCode,
+            x.LocationName,
+            x.LocationType,
+            x.OnHand,
+            x.Version)).ToList());
+    }
+
+    /// <summary>
+    /// ロケーション間在庫移動指示を作成します。
+    /// </summary>
+    [HttpPost("transfers")]
+    [ProducesResponseType(typeof(LocationTransferCreatedResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CreateLocationTransfer([FromBody] TransferLocationInventoryRequest request, CancellationToken cancellationToken)
+    {
+        var transferId = Guid.NewGuid();
+        var result = await _inventoryService.CreateLocationTransferAsync(
+            new CreateLocationTransferCommand(
+                transferId,
+                request.ProductId,
+                request.FromLocationId,
+                request.ToLocationId,
+                request.Quantity,
+                request.Note),
+            cancellationToken);
+        return ToTransferActionResult(result, transferId);
+    }
+
+    /// <summary>
+    /// 移動指示を出荷済みに更新します。
+    /// </summary>
+    [HttpPost("transfers/{transferId:guid}/ship")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ShipLocationTransfer(Guid transferId, CancellationToken cancellationToken)
+    {
+        var result = await _inventoryService.ShipLocationTransferAsync(new LocationTransferActionCommand(transferId), cancellationToken);
+        return ToTransferActionResult(result);
+    }
+
+    /// <summary>
+    /// 出荷済み移動を入荷済みに更新します。
+    /// </summary>
+    [HttpPost("transfers/{transferId:guid}/receive")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ReceiveLocationTransfer(Guid transferId, CancellationToken cancellationToken)
+    {
+        var result = await _inventoryService.ReceiveLocationTransferAsync(new LocationTransferActionCommand(transferId), cancellationToken);
+        return ToTransferActionResult(result);
+    }
+
+    /// <summary>
+    /// 移動指示を取消します。
+    /// </summary>
+    [HttpPost("transfers/{transferId:guid}/cancel")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> CancelLocationTransfer(Guid transferId, CancellationToken cancellationToken)
+    {
+        var result = await _inventoryService.CancelLocationTransferAsync(new LocationTransferActionCommand(transferId), cancellationToken);
+        return ToTransferActionResult(result);
+    }
+
+    /// <summary>
+    /// 商品単位のロケーション移動履歴を取得します。
+    /// </summary>
+    [HttpGet("{productId:guid}/transfers")]
+    [ProducesResponseType(typeof(IReadOnlyList<LocationInventoryTransferResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListLocationTransfers(
+        Guid productId,
+        [FromQuery] int take = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var rows = await _inventoryService.GetLocationTransfersAsync(productId, take, cancellationToken);
+        return Ok(rows.Select(x => new LocationInventoryTransferResponse(
+            x.Id,
+            x.ProductId,
+            x.FromLocationId,
+            x.ToLocationId,
+            x.Quantity,
+            x.Status,
+            x.Note,
+            x.CreatedAtUtc,
+            x.ShippedAtUtc,
+            x.ReceivedAtUtc)).ToList());
+    }
+
+    /// <summary>
     /// 更新結果をHTTPレスポンスへ変換します。
     /// </summary>
     /// <param name="result">在庫更新結果です。</param>
@@ -85,8 +222,62 @@ public class AdminInventoryController(IInventoryService inventoryService) : Cont
             _ => BadRequest("invalid_quantity")
         };
     }
+
+    /// <summary>
+    /// ロケーション移動結果をHTTPレスポンスへ変換します。
+    /// </summary>
+    private IActionResult ToTransferActionResult(TransferLocationInventoryResult result, Guid? createdTransferId = null)
+    {
+        return result.Status switch
+        {
+            TransferLocationInventoryStatus.Success when createdTransferId.HasValue => Created($"/admin/inventory/transfers/{createdTransferId.Value}", new LocationTransferCreatedResponse(createdTransferId.Value)),
+            TransferLocationInventoryStatus.Success => NoContent(),
+            TransferLocationInventoryStatus.TransferNotFound => NotFound("transfer_not_found"),
+            TransferLocationInventoryStatus.ProductNotFound => NotFound("product_not_found"),
+            TransferLocationInventoryStatus.LocationNotFound => NotFound("location_not_found"),
+            TransferLocationInventoryStatus.InsufficientStock => Conflict("insufficient_stock"),
+            TransferLocationInventoryStatus.ConcurrencyConflict => Conflict("concurrency_conflict"),
+            TransferLocationInventoryStatus.InvalidStatus => Conflict("invalid_status"),
+            _ => BadRequest("invalid_request")
+        };
+    }
 }
 
 public sealed record ReceiveInventoryRequest(Guid ProductId, int Quantity, int ExpectedVersion, string? Note);
 public sealed record IssueInventoryRequest(Guid ProductId, int Quantity, int ExpectedVersion, string? Note);
 public sealed record AdjustInventoryRequest(Guid ProductId, int NewOnHand, int ExpectedVersion, string? Note);
+public sealed record InventoryTransactionResponse(
+    Guid Id,
+    Guid ProductId,
+    string Type,
+    int QuantityDelta,
+    int OnHandAfter,
+    int ReservedAfter,
+    string? Note,
+    DateTime CreatedAtUtc);
+public sealed record StockLocationResponse(Guid Id, string Code, string Name, string Type);
+public sealed record LocationInventoryStockResponse(
+    Guid LocationId,
+    string LocationCode,
+    string LocationName,
+    string LocationType,
+    int OnHand,
+    int Version);
+public sealed record TransferLocationInventoryRequest(
+    Guid ProductId,
+    Guid FromLocationId,
+    Guid ToLocationId,
+    int Quantity,
+    string? Note);
+public sealed record LocationTransferCreatedResponse(Guid TransferId);
+public sealed record LocationInventoryTransferResponse(
+    Guid Id,
+    Guid ProductId,
+    Guid FromLocationId,
+    Guid ToLocationId,
+    int Quantity,
+    string Status,
+    string? Note,
+    DateTime CreatedAtUtc,
+    DateTime? ShippedAtUtc,
+    DateTime? ReceivedAtUtc);
