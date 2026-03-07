@@ -43,3 +43,11 @@ export type LocationInventoryTransferResponse = {
 export type LocationTransferCreatedResponse = {
   transferId: string
 }
+
+export type InventoryOperationType = "receive" | "issue" | "adjust"
+
+export type InventoryOperationResult = {
+  ok: boolean
+  code?: string
+  message: string
+}
