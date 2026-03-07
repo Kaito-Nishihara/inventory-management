@@ -4,6 +4,7 @@ import { postAuthLogin, type LoginRequest, type PostAuthLoginResponse } from "..
 import { client } from "../api/identity/client.gen"
 import { getRoleFromJwt } from "../features/auth/tokenRole"
 import type { CartItem, CategoryResponse, ProductListResponse, ProductResponse } from "../features/catalog/types"
+import { mapValidationMessageFromResponse } from "../features/validation/messages"
 import type { CheckoutExecutionResult, CheckoutLineResult } from "../features/order/checkoutSummary"
 import type { OrderResponse } from "../features/order/types"
 import type {
@@ -59,6 +60,14 @@ function AppRouter() {
     if (statusCode === 409) return "在庫不足のため注文できません。"
     return `APIエラーが発生しました (${statusCode})`
   }, [])
+  const mapApiErrorResponse = useCallback(
+    async (response: Response): Promise<string> => {
+      const validationMessage = await mapValidationMessageFromResponse(response.clone())
+      if (validationMessage) return validationMessage
+      return mapApiError(response.status)
+    },
+    [mapApiError],
+  )
   const isAdmin = useMemo(() => getRoleFromJwt(token) === "admin", [token])
 
   const fetchCategories = useCallback(async (): Promise<CategoryResponse[]> => {
@@ -73,11 +82,11 @@ function AppRouter() {
     })
 
     if (!response.ok) {
-      throw new Error(mapApiError(response.status))
+      throw new Error(await mapApiErrorResponse(response))
     }
 
     return (await response.json()) as CategoryResponse[]
-  }, [catalogBaseUrl, mapApiError, token])
+  }, [catalogBaseUrl, mapApiErrorResponse, token])
 
   const fetchProductsPage = useCallback(
     async (query: {
@@ -105,12 +114,12 @@ function AppRouter() {
       })
 
       if (!response.ok) {
-        throw new Error(mapApiError(response.status))
+        throw new Error(await mapApiErrorResponse(response))
       }
 
       return (await response.json()) as ProductListResponse
     },
-    [catalogBaseUrl, mapApiError, token],
+    [catalogBaseUrl, mapApiErrorResponse, token],
   )
 
   const loadProductById = useCallback(
@@ -122,12 +131,12 @@ function AppRouter() {
       })
 
       if (!response.ok) {
-        throw new Error(mapApiError(response.status))
+        throw new Error(await mapApiErrorResponse(response))
       }
 
       return (await response.json()) as ProductResponse
     },
-    [catalogBaseUrl, mapApiError],
+    [catalogBaseUrl, mapApiErrorResponse],
   )
 
   const fetchStockLocations = useCallback(async (): Promise<StockLocationResponse[]> => {
@@ -142,11 +151,11 @@ function AppRouter() {
     })
 
     if (!response.ok) {
-      throw new Error(mapApiError(response.status))
+      throw new Error(await mapApiErrorResponse(response))
     }
 
     return (await response.json()) as StockLocationResponse[]
-  }, [catalogBaseUrl, mapApiError, token])
+  }, [catalogBaseUrl, mapApiErrorResponse, token])
 
   const fetchLocationStocks = useCallback(
     async (productId: string): Promise<LocationInventoryStockResponse[]> => {
@@ -161,12 +170,12 @@ function AppRouter() {
       })
 
       if (!response.ok) {
-        throw new Error(mapApiError(response.status))
+        throw new Error(await mapApiErrorResponse(response))
       }
 
       return (await response.json()) as LocationInventoryStockResponse[]
     },
-    [catalogBaseUrl, mapApiError, token],
+    [catalogBaseUrl, mapApiErrorResponse, token],
   )
 
   const fetchLocationTransfers = useCallback(
@@ -182,12 +191,12 @@ function AppRouter() {
       })
 
       if (!response.ok) {
-        throw new Error(mapApiError(response.status))
+        throw new Error(await mapApiErrorResponse(response))
       }
 
       return (await response.json()) as LocationInventoryTransferResponse[]
     },
-    [catalogBaseUrl, mapApiError, token],
+    [catalogBaseUrl, mapApiErrorResponse, token],
   )
 
   const createLocationTransfer = useCallback(
@@ -222,6 +231,10 @@ function AppRouter() {
         return { ok: true, message: "在庫移動を指示しました。", transferId: body.transferId }
       }
 
+      if (response.status === 400) {
+        return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
+      }
+
       const code = (await response.text()).replaceAll('"', "")
       if (response.status === 409 && code === "insufficient_stock") {
         return { ok: false, code, message: "移動元ロケーションの在庫が不足しています。" }
@@ -235,9 +248,9 @@ function AppRouter() {
       if (response.status === 400 && code === "invalid_request") {
         return { ok: false, code, message: "移動条件が不正です。" }
       }
-      return { ok: false, code, message: mapApiError(response.status) }
+      return { ok: false, code, message: await mapApiErrorResponse(response) }
     },
-    [catalogBaseUrl, mapApiError, token],
+    [catalogBaseUrl, mapApiErrorResponse, token],
   )
 
   const runTransferAction = useCallback(
@@ -259,6 +272,10 @@ function AppRouter() {
         return { ok: true, message }
       }
 
+      if (response.status === 400) {
+        return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
+      }
+
       const code = (await response.text()).replaceAll('"', "")
       if (response.status === 404 && code === "transfer_not_found") {
         return { ok: false, code, message: "移動指示が見つかりません。" }
@@ -270,9 +287,9 @@ function AppRouter() {
         return { ok: false, code, message: "移動元ロケーションの在庫が不足しています。" }
       }
 
-      return { ok: false, code, message: mapApiError(response.status) }
+      return { ok: false, code, message: await mapApiErrorResponse(response) }
     },
-    [catalogBaseUrl, mapApiError, token],
+    [catalogBaseUrl, mapApiErrorResponse, token],
   )
 
   const fetchOrders = useCallback(async (): Promise<OrderResponse[]> => {
@@ -287,11 +304,11 @@ function AppRouter() {
     })
 
     if (!response.ok) {
-      throw new Error(mapApiError(response.status))
+      throw new Error(await mapApiErrorResponse(response))
     }
 
     return (await response.json()) as OrderResponse[]
-  }, [mapApiError, orderBaseUrl, token])
+  }, [mapApiErrorResponse, orderBaseUrl, token])
 
   const fetchOrderById = useCallback(
     async (orderId: string): Promise<OrderResponse> => {
@@ -306,12 +323,12 @@ function AppRouter() {
       })
 
       if (!response.ok) {
-        throw new Error(mapApiError(response.status))
+        throw new Error(await mapApiErrorResponse(response))
       }
 
       return (await response.json()) as OrderResponse
     },
-    [mapApiError, orderBaseUrl, token],
+    [mapApiErrorResponse, orderBaseUrl, token],
   )
 
   const handleAddToCart = (product: ProductResponse) => {
@@ -356,7 +373,7 @@ function AppRouter() {
     )
   }
 
-  const handleCheckout = async (targetProductIds?: string[]): Promise<CheckoutExecutionResult> => {
+  const handleCheckout = useCallback(async (targetProductIds?: string[]): Promise<CheckoutExecutionResult> => {
     if (!token) {
       return {
         results: [],
@@ -391,12 +408,13 @@ function AppRouter() {
         })
 
         if (!response.ok) {
+          const message = await mapApiErrorResponse(response)
           results.push({
             productId: item.productId,
             name: item.name,
             quantity: item.quantity,
             status: "failed",
-            message: mapApiError(response.status),
+            message,
           })
           continue
         }
@@ -431,7 +449,7 @@ function AppRouter() {
     } finally {
       setIsCheckoutLoading(false)
     }
-  }
+  }, [cartItems, mapApiErrorResponse, orderBaseUrl, token])
 
   const handlePreset = (role: "admin" | "user") => {
     setEmail(role === "admin" ? ADMIN_EMAIL : USER_EMAIL)

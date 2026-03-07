@@ -1,6 +1,8 @@
 using Catalog.Api.Application.Products;
+using Backend.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 
 namespace Catalog.Api.Controllers;
 
@@ -77,6 +79,14 @@ public class AdminProductsController(IProductService productService) : Controlle
     }
 }
 
-public sealed record CreateProductRequest(Guid CategoryId, string Name, string Description, decimal Price);
-public sealed record UpdateProductRequest(Guid CategoryId, string Name, string Description, decimal Price);
+public sealed record CreateProductRequest(
+    [NonEmptyGuid(ErrorMessage = ValidationCodes.NonEmptyGuid)] Guid CategoryId,
+    [Required(ErrorMessage = ValidationCodes.Required), StringLength(200, MinimumLength = 1, ErrorMessage = ValidationCodes.StringLength)] string Name,
+    [Required(ErrorMessage = ValidationCodes.Required), StringLength(2000, MinimumLength = 1, ErrorMessage = ValidationCodes.StringLength)] string Description,
+    [Range(typeof(decimal), "0.01", "79228162514264337593543950335", ErrorMessage = ValidationCodes.Range)] decimal Price);
+public sealed record UpdateProductRequest(
+    [NonEmptyGuid(ErrorMessage = ValidationCodes.NonEmptyGuid)] Guid CategoryId,
+    [Required(ErrorMessage = ValidationCodes.Required), StringLength(200, MinimumLength = 1, ErrorMessage = ValidationCodes.StringLength)] string Name,
+    [Required(ErrorMessage = ValidationCodes.Required), StringLength(2000, MinimumLength = 1, ErrorMessage = ValidationCodes.StringLength)] string Description,
+    [Range(typeof(decimal), "0.01", "79228162514264337593543950335", ErrorMessage = ValidationCodes.Range)] decimal Price);
 public sealed record PublishProductRequest(bool IsPublished);

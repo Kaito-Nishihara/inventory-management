@@ -1,6 +1,8 @@
 using Catalog.Api.Application.Inventory;
+using Backend.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 
 namespace Catalog.Api.Controllers;
 
@@ -245,9 +247,21 @@ public class AdminInventoryController(IInventoryService inventoryService) : Cont
     }
 }
 
-public sealed record ReceiveInventoryRequest(Guid ProductId, int Quantity, int ExpectedVersion, string? Note);
-public sealed record IssueInventoryRequest(Guid ProductId, int Quantity, int ExpectedVersion, string? Note);
-public sealed record AdjustInventoryRequest(Guid ProductId, int NewOnHand, int ExpectedVersion, string? Note);
+public sealed record ReceiveInventoryRequest(
+    [NonEmptyGuid(ErrorMessage = ValidationCodes.NonEmptyGuid)] Guid ProductId,
+    [Range(1, int.MaxValue, ErrorMessage = ValidationCodes.Range)] int Quantity,
+    [Range(0, int.MaxValue, ErrorMessage = ValidationCodes.Range)] int ExpectedVersion,
+    [StringLength(512, ErrorMessage = ValidationCodes.StringLength)] string? Note);
+public sealed record IssueInventoryRequest(
+    [NonEmptyGuid(ErrorMessage = ValidationCodes.NonEmptyGuid)] Guid ProductId,
+    [Range(1, int.MaxValue, ErrorMessage = ValidationCodes.Range)] int Quantity,
+    [Range(0, int.MaxValue, ErrorMessage = ValidationCodes.Range)] int ExpectedVersion,
+    [StringLength(512, ErrorMessage = ValidationCodes.StringLength)] string? Note);
+public sealed record AdjustInventoryRequest(
+    [NonEmptyGuid(ErrorMessage = ValidationCodes.NonEmptyGuid)] Guid ProductId,
+    [Range(0, int.MaxValue, ErrorMessage = ValidationCodes.Range)] int NewOnHand,
+    [Range(0, int.MaxValue, ErrorMessage = ValidationCodes.Range)] int ExpectedVersion,
+    [StringLength(512, ErrorMessage = ValidationCodes.StringLength)] string? Note);
 public sealed record InventoryTransactionResponse(
     Guid Id,
     Guid ProductId,
@@ -268,11 +282,11 @@ public sealed record LocationInventoryStockResponse(
     int InTransitOut,
     int InTransitIn);
 public sealed record TransferLocationInventoryRequest(
-    Guid ProductId,
-    Guid FromLocationId,
-    Guid ToLocationId,
-    int Quantity,
-    string? Note);
+    [NonEmptyGuid(ErrorMessage = ValidationCodes.NonEmptyGuid)] Guid ProductId,
+    [NonEmptyGuid(ErrorMessage = ValidationCodes.NonEmptyGuid)] Guid FromLocationId,
+    [NonEmptyGuid(ErrorMessage = ValidationCodes.NonEmptyGuid)] Guid ToLocationId,
+    [Range(1, int.MaxValue, ErrorMessage = ValidationCodes.Range)] int Quantity,
+    [StringLength(512, ErrorMessage = ValidationCodes.StringLength)] string? Note);
 public sealed record LocationTransferCreatedResponse(Guid TransferId);
 public sealed record LocationInventoryTransferResponse(
     Guid Id,

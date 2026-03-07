@@ -4,6 +4,7 @@ using Catalog.Api.Application.Products;
 using Catalog.Api.Grpc;
 using Catalog.Api.Infrastructure;
 using Catalog.Api.Infrastructure.Repositories;
+using Backend.Validation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
@@ -27,6 +28,7 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 builder.Services.AddControllers();
+builder.Services.AddUnifiedApiValidation();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>

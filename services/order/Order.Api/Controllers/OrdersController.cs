@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using System.ComponentModel.DataAnnotations;
 using Order.Api.Application.Orders;
+using Backend.Validation;
 
 namespace Order.Api.Controllers;
 
@@ -121,9 +123,12 @@ public class AdminOrdersController(IOrderService orderService) : ControllerBase
     }
 }
 
-public sealed record CreateOrderRequest(Guid ProductId, int Quantity);
+public sealed record CreateOrderRequest(
+    [NonEmptyGuid(ErrorMessage = ValidationCodes.NonEmptyGuid)] Guid ProductId,
+    [Range(1, int.MaxValue, ErrorMessage = ValidationCodes.Range)] int Quantity);
 public sealed record CreateOrderResponse(Guid OrderId);
-public sealed record ChangeOrderStatusRequest(string NextStatus);
+public sealed record ChangeOrderStatusRequest(
+    [Required(ErrorMessage = ValidationCodes.Required), StringLength(50, MinimumLength = 1, ErrorMessage = ValidationCodes.StringLength)] string NextStatus);
 public sealed record OrderResponse(
     Guid Id,
     string UserId,

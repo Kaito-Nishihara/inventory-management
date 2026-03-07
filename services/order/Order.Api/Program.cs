@@ -1,4 +1,5 @@
 using Inventory.Contracts;
+using Backend.Validation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -14,6 +15,7 @@ AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddUnifiedApiValidation();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
