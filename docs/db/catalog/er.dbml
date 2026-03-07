@@ -1,5 +1,13 @@
 // catalog schema
-// GeneratedAtUtc: 2026-02-25T20:54:52Z
+// GeneratedAtUtc: 2026-03-07T23:52:55Z
+
+Table catalog.categories {
+  Id uuid [pk,not null]
+  Key varchar(50) [not null]
+  Name varchar(100) [not null]
+  SortOrder integer [not null]
+  IsActive boolean [not null]
+}
 
 Table catalog.inventory_items {
   ProductId uuid [pk,not null]
@@ -20,6 +28,28 @@ Table catalog.inventory_transactions {
   CreatedAtUtc timestamptz [not null]
 }
 
+Table catalog.location_inventory_items {
+  Id uuid [pk,not null]
+  ProductId uuid [not null]
+  LocationId uuid [not null]
+  OnHand integer [not null]
+  Version integer [not null]
+  UpdatedAtUtc timestamptz [not null]
+}
+
+Table catalog.location_inventory_transfers {
+  Id uuid [pk,not null]
+  ProductId uuid [not null]
+  FromLocationId uuid [not null]
+  ToLocationId uuid [not null]
+  Quantity integer [not null]
+  Note varchar(512)
+  CreatedAtUtc timestamptz [not null]
+  ReceivedAtUtc timestamptz
+  ShippedAtUtc timestamptz
+  Status varchar(20) [not null]
+}
+
 Table catalog.products {
   Id uuid [pk,not null]
   Name varchar(200) [not null]
@@ -28,6 +58,17 @@ Table catalog.products {
   IsPublished boolean [not null]
   CreatedAtUtc timestamptz [not null]
   UpdatedAtUtc timestamptz [not null]
+  CategoryId uuid [not null]
+}
+
+Table catalog.stock_locations {
+  Id uuid [pk,not null]
+  Code varchar(50) [not null]
+  Name varchar(100) [not null]
+  Type varchar(50) [not null]
+  IsActive boolean [not null]
+  CreatedAtUtc timestamptz [not null]
 }
 
 Ref: catalog.inventory_items.ProductId > catalog.products.Id
+Ref: catalog.products.CategoryId > catalog.categories.Id
