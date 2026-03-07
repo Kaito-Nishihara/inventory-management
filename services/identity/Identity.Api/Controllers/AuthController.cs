@@ -1,5 +1,7 @@
 using Identity.Api.Application.Auth;
+using Backend.Validation;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 
 namespace Identity.Api.Controllers;
 
@@ -96,8 +98,14 @@ public class AuthController(IAuthService authService) : ControllerBase
     }
 }
 
-public record RegisterRequest(string Email, string Password);
-public record LoginRequest(string Email, string Password);
-public record RefreshRequest(string RefreshToken);
-public record RevokeRequest(string RefreshToken);
+public record RegisterRequest(
+    [Required(ErrorMessage = ValidationCodes.Required), EmailAddress(ErrorMessage = ValidationCodes.Email), StringLength(200, ErrorMessage = ValidationCodes.StringLength)] string Email,
+    [Required(ErrorMessage = ValidationCodes.Required), StringLength(100, MinimumLength = 8, ErrorMessage = ValidationCodes.StringLength)] string Password);
+public record LoginRequest(
+    [Required(ErrorMessage = ValidationCodes.Required), StringLength(200, ErrorMessage = ValidationCodes.StringLength)] string Email,
+    [Required(ErrorMessage = ValidationCodes.Required), StringLength(100, ErrorMessage = ValidationCodes.StringLength)] string Password);
+public record RefreshRequest(
+    [Required(ErrorMessage = ValidationCodes.Required), StringLength(500, MinimumLength = 20, ErrorMessage = ValidationCodes.StringLength)] string RefreshToken);
+public record RevokeRequest(
+    [Required(ErrorMessage = ValidationCodes.Required), StringLength(500, MinimumLength = 20, ErrorMessage = ValidationCodes.StringLength)] string RefreshToken);
 public record AuthTokensResponse(string AccessToken, string RefreshToken);

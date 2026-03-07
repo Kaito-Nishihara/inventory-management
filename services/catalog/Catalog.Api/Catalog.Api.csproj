@@ -23,4 +23,8 @@
     <Protobuf Include="Protos\inventory.proto" GrpcServices="Server" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\common\Backend.Validation\Backend.Validation.csproj" />
+  </ItemGroup>
+
 </Project>

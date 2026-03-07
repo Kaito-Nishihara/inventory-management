@@ -1,4 +1,5 @@
 using Identity.Api.Application.Auth;
+using Backend.Validation;
 using Identity.Api.Domain;
 using Identity.Api.Infrastructure;
 using Identity.Api.Infrastructure.Repositories;
@@ -12,6 +13,7 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddUnifiedApiValidation();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
