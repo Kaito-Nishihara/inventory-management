@@ -12,8 +12,11 @@ import type {
   LocationTransferCreatedResponse,
   LocationInventoryTransferResponse,
   StockLocationResponse,
+  InventoryOperationResult,
+  InventoryTransactionResponse,
 } from "../features/inventory/types"
 import AdminInventoryPage from "../pages/AdminInventoryPage"
+import AdminInventoryOperationsPage from "../pages/AdminInventoryOperationsPage"
 import CheckoutPage from "../pages/CheckoutPage"
 import LoginPage from "../pages/LoginPage"
 import OrdersPage from "../pages/OrdersPage"
@@ -288,6 +291,151 @@ function AppRouter() {
       }
 
       return { ok: false, code, message: await mapApiErrorResponse(response) }
+    },
+    [catalogBaseUrl, mapApiErrorResponse, token],
+  )
+
+  const receiveInventory = useCallback(
+    async (draft: {
+      productId: string
+      quantity: number
+      expectedVersion: number
+      note?: string
+    }): Promise<InventoryOperationResult> => {
+      if (!token) {
+        return { ok: false, message: "JWT がありません。再ログインしてください。" }
+      }
+
+      const response = await fetch(`${catalogBaseUrl}/admin/inventory/receive`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(draft),
+      })
+
+      if (response.status === 204) {
+        return { ok: true, message: "入庫を実行しました。" }
+      }
+      if (response.status === 400) {
+        return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
+      }
+
+      const code = (await response.text()).replaceAll('"', "")
+      if (response.status === 409 && code === "version_conflict") {
+        return { ok: false, code, message: "バージョン競合が発生しました。最新データを取得してから再試行してください。" }
+      }
+      if (response.status === 404) {
+        return { ok: false, code, message: "商品が見つかりません。" }
+      }
+      return { ok: false, code, message: await mapApiErrorResponse(response) }
+    },
+    [catalogBaseUrl, mapApiErrorResponse, token],
+  )
+
+  const issueInventory = useCallback(
+    async (draft: {
+      productId: string
+      quantity: number
+      expectedVersion: number
+      note?: string
+    }): Promise<InventoryOperationResult> => {
+      if (!token) {
+        return { ok: false, message: "JWT がありません。再ログインしてください。" }
+      }
+
+      const response = await fetch(`${catalogBaseUrl}/admin/inventory/issue`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(draft),
+      })
+
+      if (response.status === 204) {
+        return { ok: true, message: "出庫を実行しました。" }
+      }
+      if (response.status === 400) {
+        return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
+      }
+
+      const code = (await response.text()).replaceAll('"', "")
+      if (response.status === 409 && code === "version_conflict") {
+        return { ok: false, code, message: "バージョン競合が発生しました。最新データを取得してから再試行してください。" }
+      }
+      if (response.status === 409 && code === "insufficient_available") {
+        return { ok: false, code, message: "販売可能在庫が不足しています。" }
+      }
+      if (response.status === 404) {
+        return { ok: false, code, message: "商品が見つかりません。" }
+      }
+      return { ok: false, code, message: await mapApiErrorResponse(response) }
+    },
+    [catalogBaseUrl, mapApiErrorResponse, token],
+  )
+
+  const adjustInventory = useCallback(
+    async (draft: {
+      productId: string
+      newOnHand: number
+      expectedVersion: number
+      note?: string
+    }): Promise<InventoryOperationResult> => {
+      if (!token) {
+        return { ok: false, message: "JWT がありません。再ログインしてください。" }
+      }
+
+      const response = await fetch(`${catalogBaseUrl}/admin/inventory/adjust`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(draft),
+      })
+
+      if (response.status === 204) {
+        return { ok: true, message: "棚卸調整を実行しました。" }
+      }
+      if (response.status === 400) {
+        const code = (await response.text()).replaceAll('"', "")
+        if (code === "invalid_on_hand") {
+          return { ok: false, code, message: "在庫数が不正です。引当中の在庫を下回ることはできません。" }
+        }
+        return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
+      }
+
+      const code = (await response.text()).replaceAll('"', "")
+      if (response.status === 409 && code === "version_conflict") {
+        return { ok: false, code, message: "バージョン競合が発生しました。最新データを取得してから再試行してください。" }
+      }
+      if (response.status === 404) {
+        return { ok: false, code, message: "商品が見つかりません。" }
+      }
+      return { ok: false, code, message: await mapApiErrorResponse(response) }
+    },
+    [catalogBaseUrl, mapApiErrorResponse, token],
+  )
+
+  const fetchTransactions = useCallback(
+    async (productId: string, take = 20): Promise<InventoryTransactionResponse[]> => {
+      if (!token) {
+        throw new Error("JWT がありません。再ログインしてください。")
+      }
+
+      const response = await fetch(`${catalogBaseUrl}/admin/inventory/${productId}/transactions?take=${take}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(await mapApiErrorResponse(response))
+      }
+
+      return (await response.json()) as InventoryTransactionResponse[]
     },
     [catalogBaseUrl, mapApiErrorResponse, token],
   )
@@ -596,6 +744,27 @@ function AppRouter() {
                 shipLocationTransfer={(transferId) => runTransferAction(transferId, "ship")}
                 receiveLocationTransfer={(transferId) => runTransferAction(transferId, "receive")}
                 cancelLocationTransfer={(transferId) => runTransferAction(transferId, "cancel")}
+              />
+            ) : (
+              <Navigate to="/products" replace />
+            )
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+      <Route
+        path="/admin/inventory/operations"
+        element={
+          token ? (
+            isAdmin ? (
+              <AdminInventoryOperationsPage
+                onLogout={handleLogout}
+                fetchProductsPage={fetchProductsPage}
+                receiveInventory={receiveInventory}
+                issueInventory={issueInventory}
+                adjustInventory={adjustInventory}
+                fetchTransactions={fetchTransactions}
               />
             ) : (
               <Navigate to="/products" replace />

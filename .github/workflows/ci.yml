@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: web (lint/test/build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit test
+        run: npm run test:unit
+
+      - name: Build
+        run: npm run build
+
+  dotnet:
+    name: dotnet (test)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore inventory-management.sln
+
+      - name: Test Identity
+        run: dotnet test services/identity/Identity.Api.Tests/Identity.Api.Tests.csproj --configuration Release --no-restore
+
+      - name: Test Catalog
+        run: dotnet test services/catalog/Catalog.Api.Tests/Catalog.Api.Tests.csproj --configuration Release --no-restore
+
+      - name: Test Order
+        run: dotnet test services/order/Order.Api.Tests/Order.Api.Tests.csproj --configuration Release --no-restore

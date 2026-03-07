@@ -167,7 +167,7 @@ test("admin can create and progress transfer status", async ({ page }) => {
   await page.getByPlaceholder("店舗補充 / 欠品対応 など").fill("店舗補充")
   await page.getByRole("button", { name: "移動指示を作成する" }).click()
   await expect(page.getByText("在庫移動を指示しました。")).toBeVisible()
-  await expect(page.getByText("移動指示")).toBeVisible()
+  await expect(page.getByText("移動指示", { exact: true })).toBeVisible()
 
   await page.getByRole("button", { name: "出荷確定" }).click()
   await expect(page.getByText("出荷を確定しました。")).toBeVisible()
