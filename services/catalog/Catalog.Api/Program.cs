@@ -4,7 +4,9 @@ using Catalog.Api.Application.Products;
 using Catalog.Api.Grpc;
 using Catalog.Api.Infrastructure;
 using Catalog.Api.Infrastructure.Repositories;
+using Catalog.Api.Security;
 using Backend.Validation;
+using Backend.Validation.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
@@ -71,7 +73,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(CatalogPolicies.CatalogAdmin, policy =>
+        policy.RequireRole(AppRoles.Admin));
+});
 
 var app = builder.Build();
 

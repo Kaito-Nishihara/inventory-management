@@ -1,5 +1,6 @@
 using Inventory.Contracts;
 using Backend.Validation;
+using Backend.Validation.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -8,6 +9,7 @@ using Order.Api.Domain;
 using Order.Api.Infrastructure;
 using Order.Api.Infrastructure.Clients;
 using Order.Api.Infrastructure.Repositories;
+using Order.Api.Security;
 using System.Text;
 
 AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
@@ -60,7 +62,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(OrderPolicies.OrdersRead, policy =>
+        policy.RequireAuthenticatedUser());
+    options.AddPolicy(OrderPolicies.OrdersManage, policy =>
+        policy.RequireRole(AppRoles.Admin));
+});
 
 var app = builder.Build();
 

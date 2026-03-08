@@ -3,12 +3,13 @@ using Backend.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+using Catalog.Api.Security;
 
 namespace Catalog.Api.Controllers;
 
 [ApiController]
 [Route("admin/products")]
-[Authorize(Roles = "admin")]
+[Authorize(Policy = CatalogPolicies.CatalogAdmin)]
 public class AdminProductsController(IProductService productService) : ControllerBase
 {
     private readonly IProductService _productService = productService;

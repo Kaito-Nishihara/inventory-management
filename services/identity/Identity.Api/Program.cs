@@ -4,11 +4,13 @@ using Identity.Api.Domain;
 using Identity.Api.Infrastructure;
 using Identity.Api.Infrastructure.Repositories;
 using Identity.Api.Infrastructure.Security;
+using Identity.Api.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Backend.Validation.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -55,7 +57,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(IdentityPolicies.AuthAuditRead, policy =>
+        policy.RequireRole(AppRoles.Admin));
+});
 
 var app = builder.Build();
 

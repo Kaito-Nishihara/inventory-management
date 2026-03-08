@@ -3,12 +3,13 @@ using Backend.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+using Catalog.Api.Security;
 
 namespace Catalog.Api.Controllers;
 
 [ApiController]
 [Route("admin/inventory")]
-[Authorize(Roles = "admin")]
+[Authorize(Policy = CatalogPolicies.CatalogAdmin)]
 public class AdminInventoryController(IInventoryService inventoryService) : ControllerBase
 {
     private readonly IInventoryService _inventoryService = inventoryService;
