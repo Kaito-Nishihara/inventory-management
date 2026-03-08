@@ -33,4 +33,14 @@ describe("normalizeApiError", () => {
     expect(result.code).toBe("validation_error")
     expect(result.message).toBe("商品IDは必須です。")
   })
+
+  it("ProblemDetails の汎用 title はステータス別日本語へフォールバックする", async () => {
+    const response = new Response(
+      JSON.stringify({ title: "Conflict", status: 409, code: "insufficient_available" }),
+      { status: 409, headers: { "Content-Type": "application/json" } },
+    )
+    const result = await normalizeApiError(response)
+    expect(result.code).toBe("insufficient_available")
+    expect(result.message).toBe("競合が発生しました。内容を確認して再試行してください。")
+  })
 })

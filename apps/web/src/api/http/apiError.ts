@@ -14,6 +14,8 @@ type ProblemDetailsLike = {
   code?: string
 }
 
+const GENERIC_PROBLEM_TITLES = new Set(["Bad Request", "Unauthorized", "Forbidden", "Not Found", "Conflict"])
+
 function mapStatusMessage(status: number): string {
   if (status === 401) return "認証期限切れです。再ログインしてください。"
   if (status === 403) return "この操作を実行する権限がありません。"
@@ -53,6 +55,14 @@ export async function normalizeApiError(response: Response): Promise<ApiErrorDet
     }
   }
   if (problem?.title && typeof problem.title === "string") {
+    if (GENERIC_PROBLEM_TITLES.has(problem.title)) {
+      return {
+        status: response.status,
+        code: typeof problem.code === "string" ? problem.code : undefined,
+        message: mapStatusMessage(response.status),
+        requiresLogin: response.status === 401,
+      }
+    }
     return {
       status: response.status,
       code: typeof problem.code === "string" ? problem.code : undefined,
