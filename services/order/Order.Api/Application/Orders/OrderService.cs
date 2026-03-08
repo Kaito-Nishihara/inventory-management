@@ -119,6 +119,10 @@ public class OrderService(IOrderRepository orderRepository, IInventoryReservatio
             x.Status,
             x.CreatedAtUtc,
             x.UpdatedAtUtc,
-            x.Items.Select(i => new OrderItemResult(i.ProductId, i.Quantity)).ToList());
+            x.Items.Select(i => new OrderItemResult(i.ProductId, i.Quantity)).ToList(),
+            x.StatusHistory
+                .OrderByDescending(h => h.CreatedAtUtc)
+                .Select(h => new OrderStatusHistoryResult(h.Id, h.Status, h.Note, h.CreatedAtUtc))
+                .ToList());
     }
 }
