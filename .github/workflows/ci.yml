@@ -63,3 +63,33 @@ jobs:
 
       - name: Test Order
         run: dotnet test services/order/Order.Api.Tests/Order.Api.Tests.csproj --configuration Release --no-restore
+
+  e2e:
+    name: web (e2e)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E test
+        run: npm run test:e2e
+
+  db-docs:
+    name: db-docs (generate)
+    uses: ./.github/workflows/db-docs.yml
