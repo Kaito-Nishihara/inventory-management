@@ -90,6 +90,36 @@ public class ProductService(IProductRepository productRepository) : IProductServ
     }
 
     /// <summary>
+    /// 管理者向けに公開/非公開を含む商品一覧をページングで取得します。
+    /// </summary>
+    /// <param name="query">一覧クエリです。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>商品一覧ページです。</returns>
+    public async Task<ProductListPageResult> GetAdminListAsync(ProductListQuery query, CancellationToken cancellationToken = default)
+    {
+        var safePage = Math.Max(1, query.Page);
+        var safePageSize = Math.Clamp(query.PageSize, 1, 100);
+        var safeQuery = query with { Page = safePage, PageSize = safePageSize };
+
+        var (pairs, totalCount) = await _productRepository.SearchAllWithInventoryListAsync(safeQuery, cancellationToken);
+        var items = pairs.Select(x => new ProductQueryResult(
+            x.Product.Id,
+            x.Product.CategoryId,
+            x.Category.Key,
+            x.Category.Name,
+            x.Product.Name,
+            x.Product.Description,
+            x.Product.Price,
+            x.Product.IsPublished,
+            x.Inventory.OnHand,
+            x.Inventory.Reserved,
+            x.Inventory.Available,
+            x.Inventory.Version)).ToList();
+
+        return new ProductListPageResult(items, totalCount, safePage, safePageSize);
+    }
+
+    /// <summary>
     /// 公開商品の詳細を取得します。
     /// </summary>
     /// <param name="productId">商品IDです。</param>

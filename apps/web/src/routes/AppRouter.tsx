@@ -143,6 +143,40 @@ function AppRouter() {
     [catalogBaseUrl, mapApiErrorResponse],
   )
 
+  const fetchAdminProductsPage = useCallback(
+    async (query: {
+      q?: string
+      categoryId?: string
+      sort?: string
+      page: number
+      pageSize: number
+    }): Promise<ProductListResponse> => {
+      if (!token) {
+        throw new Error("JWT がありません。再ログインしてください。")
+      }
+
+      const params = new URLSearchParams()
+      params.set("page", String(query.page))
+      params.set("pageSize", String(query.pageSize))
+      if (query.q) params.set("q", query.q)
+      if (query.categoryId) params.set("categoryId", query.categoryId)
+      if (query.sort) params.set("sort", query.sort)
+
+      const response = await fetch(`${catalogBaseUrl}/admin/products?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(await mapApiErrorResponse(response))
+      }
+
+      return (await response.json()) as ProductListResponse
+    },
+    [catalogBaseUrl, mapApiErrorResponse, token],
+  )
+
   const createAdminProduct = useCallback(
     async (draft: {
       categoryId: string
@@ -171,9 +205,10 @@ function AppRouter() {
       if (response.status === 400) {
         return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
       }
-
-      const code = (await response.text()).replaceAll('"', "")
-      return { ok: false, code, message: await mapApiErrorResponse(response) }
+      if (response.status === 409) {
+        return { ok: false, code: "conflict", message: "競合が発生しました。内容を確認して再試行してください。" }
+      }
+      return { ok: false, message: await mapApiErrorResponse(response) }
     },
     [catalogBaseUrl, mapApiErrorResponse, token],
   )
@@ -211,9 +246,10 @@ function AppRouter() {
       if (response.status === 400) {
         return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
       }
-
-      const code = (await response.text()).replaceAll('"', "")
-      return { ok: false, code, message: await mapApiErrorResponse(response) }
+      if (response.status === 409) {
+        return { ok: false, code: "conflict", message: "競合が発生しました。内容を確認して再試行してください。" }
+      }
+      return { ok: false, message: await mapApiErrorResponse(response) }
     },
     [catalogBaseUrl, mapApiErrorResponse, token],
   )
@@ -240,8 +276,10 @@ function AppRouter() {
         return { ok: false, code: "not_found", message: "商品が見つかりません。" }
       }
 
-      const code = (await response.text()).replaceAll('"', "")
-      return { ok: false, code, message: await mapApiErrorResponse(response) }
+      if (response.status === 409) {
+        return { ok: false, code: "conflict", message: "競合が発生しました。内容を確認して再試行してください。" }
+      }
+      return { ok: false, message: await mapApiErrorResponse(response) }
     },
     [catalogBaseUrl, mapApiErrorResponse, token],
   )
@@ -841,7 +879,7 @@ function AppRouter() {
               <AdminProductsPage
                 onLogout={handleLogout}
                 fetchCategories={fetchCategories}
-                fetchProductsPage={fetchProductsPage}
+                fetchAdminProductsPage={fetchAdminProductsPage}
                 createAdminProduct={createAdminProduct}
                 updateAdminProduct={updateAdminProduct}
                 setAdminProductPublish={setAdminProductPublish}

@@ -32,6 +32,15 @@ public interface IProductRepository
         SearchPublishedWithInventoryListAsync(ProductListQuery query, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 管理者向けに全商品の一覧を在庫・カテゴリ付きで検索取得します。
+    /// </summary>
+    /// <param name="query">検索クエリです。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>全商品一覧と総件数です。</returns>
+    Task<(IReadOnlyList<(Product Product, InventoryItem Inventory, Category Category)> Items, int TotalCount)>
+        SearchAllWithInventoryListAsync(ProductListQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 公開商品を在庫付きで取得します。
     /// </summary>
     /// <param name="productId">商品IDです。</param>

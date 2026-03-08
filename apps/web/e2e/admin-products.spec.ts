@@ -68,7 +68,7 @@ test("admin が商品を作成・更新・公開切替できる", async ({ page 
     })
   })
 
-  await page.route("**://localhost:5002/products?*", async (route) => {
+  await page.route("**://localhost:5002/admin/products?*", async (route) => {
     const items = createdPublished ? [...publishedItems, publishedProduct(createdProductId, "新規マウス", 6800)] : publishedItems
     await route.fulfill({
       status: 200,
@@ -130,7 +130,7 @@ test("admin 商品作成時に403/409エラーを表示できる", async ({ page
       body: JSON.stringify([{ id: categoryId, key: "pc", name: "周辺機器", sortOrder: 1 }]),
     })
   })
-  await page.route("**://localhost:5002/products?*", async (route) => {
+  await page.route("**://localhost:5002/admin/products?*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -157,5 +157,5 @@ test("admin 商品作成時に403/409エラーを表示できる", async ({ page
   await expect(page.getByText("この操作を実行する権限がありません。")).toBeVisible()
 
   await page.getByRole("button", { name: "商品を作成する" }).click()
-  await expect(page.getByText("在庫不足のため注文できません。")).toBeVisible()
+  await expect(page.getByText("競合が発生しました。内容を確認して再試行してください。")).toBeVisible()
 })

@@ -35,6 +35,14 @@ public interface IProductService
     Task<ProductListPageResult> GetPublishedListAsync(ProductListQuery query, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 管理者向けに公開/非公開を含む商品一覧を取得します。
+    /// </summary>
+    /// <param name="query">一覧クエリです。</param>
+    /// <param name="cancellationToken">キャンセル用トークンです。</param>
+    /// <returns>ページングされた商品一覧です。</returns>
+    Task<ProductListPageResult> GetAdminListAsync(ProductListQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 公開商品の詳細を取得します。
     /// </summary>
     /// <param name="productId">商品IDです。</param>

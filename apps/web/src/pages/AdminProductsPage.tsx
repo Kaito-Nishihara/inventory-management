@@ -21,7 +21,7 @@ type AdminProductDraft = {
 type AdminProductsPageProps = {
   onLogout: () => void
   fetchCategories: () => Promise<CategoryResponse[]>
-  fetchProductsPage: (query: {
+  fetchAdminProductsPage: (query: {
     q?: string
     categoryId?: string
     sort?: string
@@ -35,14 +35,14 @@ type AdminProductsPageProps = {
 
 type ManagedProduct = ProductResponse & { isPublished: boolean }
 
-function toPublishedProduct(item: ProductResponse): ManagedProduct {
-  return { ...item, isPublished: true }
+function toManagedProduct(item: ProductResponse): ManagedProduct {
+  return { ...item, isPublished: item.isPublished ?? false }
 }
 
 function AdminProductsPage({
   onLogout,
   fetchCategories,
-  fetchProductsPage,
+  fetchAdminProductsPage,
   createAdminProduct,
   updateAdminProduct,
   setAdminProductPublish,
@@ -81,11 +81,11 @@ function AdminProductsPage({
     try {
       const [categoryRows, productRows] = await Promise.all([
         fetchCategories(),
-        fetchProductsPage({ page: 1, pageSize: 50, sort: "newest" }),
+        fetchAdminProductsPage({ page: 1, pageSize: 50, sort: "newest" }),
       ])
 
       setCategories(categoryRows)
-      setProducts(productRows.items.map(toPublishedProduct))
+      setProducts(productRows.items.map(toManagedProduct))
       if (!createCategoryId && categoryRows.length > 0) {
         setCreateCategoryId(categoryRows[0].id)
       }
@@ -97,31 +97,20 @@ function AdminProductsPage({
     } finally {
       setIsLoading(false)
     }
-  }, [createCategoryId, fetchCategories, fetchProductsPage, selectedProductId])
+  }, [createCategoryId, fetchAdminProductsPage, fetchCategories, selectedProductId])
 
   const reloadPublishedProducts = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const result = await fetchProductsPage({ page: 1, pageSize: 50, sort: "newest" })
-      const fetched = result.items.map(toPublishedProduct)
-
-      setProducts((prev) => {
-        const unpublished = prev.filter((x) => !x.isPublished)
-        const merged = [...fetched]
-        for (const item of unpublished) {
-          if (!merged.some((x) => x.id === item.id)) {
-            merged.push(item)
-          }
-        }
-        return merged
-      })
+      const result = await fetchAdminProductsPage({ page: 1, pageSize: 50, sort: "newest" })
+      setProducts(result.items.map((x) => ({ ...x, isPublished: x.isPublished ?? false })))
     } catch (err) {
       setError(err instanceof Error ? err.message : "商品一覧の再取得に失敗しました。")
     } finally {
       setIsLoading(false)
     }
-  }, [fetchProductsPage])
+  }, [fetchAdminProductsPage])
 
   useEffect(() => {
     void loadInitialData()
