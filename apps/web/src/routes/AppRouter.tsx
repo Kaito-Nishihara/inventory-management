@@ -2,9 +2,9 @@ import { useCallback, useMemo, useState, type FormEvent } from "react"
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom"
 import { postAuthLogin, type LoginRequest, type PostAuthLoginResponse } from "../api/identity"
 import { client } from "../api/identity/client.gen"
+import { normalizeApiError } from "../api/http/apiError"
 import { getRoleFromJwt } from "../features/auth/tokenRole"
 import type { CartItem, CategoryResponse, ProductListResponse, ProductResponse } from "../features/catalog/types"
-import { mapValidationMessageFromResponse } from "../features/validation/messages"
 import type { CheckoutExecutionResult, CheckoutLineResult } from "../features/order/checkoutSummary"
 import type { OrderResponse } from "../features/order/types"
 import type {
@@ -60,20 +60,25 @@ function AppRouter() {
     return envUrl ?? "http://localhost:5003"
   }, [])
 
-  const mapApiError = useCallback((statusCode: number): string => {
-    if (statusCode === 401) return "認証期限切れです。再ログインしてください。"
-    if (statusCode === 403) return "この操作を実行する権限がありません。"
-    if (statusCode === 404) return "対象データが見つかりません。"
-    if (statusCode === 409) return "在庫不足のため注文できません。"
-    return `APIエラーが発生しました (${statusCode})`
-  }, [])
+  const forceRelogin = useCallback((message: string) => {
+    localStorage.removeItem("inventory.jwt")
+    setToken(null)
+    setCartItems([])
+    setStatus("idle")
+    setTokenPreview(null)
+    setError(message)
+    navigate("/login", { replace: true })
+  }, [navigate])
+
   const mapApiErrorResponse = useCallback(
     async (response: Response): Promise<string> => {
-      const validationMessage = await mapValidationMessageFromResponse(response.clone())
-      if (validationMessage) return validationMessage
-      return mapApiError(response.status)
+      const normalized = await normalizeApiError(response)
+      if (normalized.requiresLogin) {
+        forceRelogin(normalized.message)
+      }
+      return normalized.message
     },
-    [mapApiError],
+    [forceRelogin],
   )
   const isAdmin = useMemo(() => getRoleFromJwt(token) === "admin", [token])
 
