@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import Button from "../components/ui/Button"
 import { getOrderStatusMeta } from "../features/order/orderStatus"
+import { getAllowedOrderStatusTransitions } from "../features/order/orderStatusTransitions"
 import type { OrderResponse } from "../features/order/types"
 
 type OrdersPageProps = {
@@ -9,9 +10,10 @@ type OrdersPageProps = {
   onLogout: () => void
   fetchOrders: () => Promise<OrderResponse[]>
   fetchOrderById: (orderId: string) => Promise<OrderResponse>
+  changeOrderStatus: (orderId: string, nextStatus: string) => Promise<{ ok: boolean; message: string }>
 }
 
-function OrdersPage({ isAdmin, onLogout, fetchOrders, fetchOrderById }: OrdersPageProps) {
+function OrdersPage({ isAdmin, onLogout, fetchOrders, fetchOrderById, changeOrderStatus }: OrdersPageProps) {
   const navigate = useNavigate()
   const [orders, setOrders] = useState<OrderResponse[]>([])
   const [listStatus, setListStatus] = useState<"loading" | "success" | "error">("loading")
@@ -19,6 +21,8 @@ function OrdersPage({ isAdmin, onLogout, fetchOrders, fetchOrderById }: OrdersPa
   const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(null)
   const [detailStatus, setDetailStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
   const [detailError, setDetailError] = useState<string | null>(null)
+  const [isStatusChanging, setIsStatusChanging] = useState(false)
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
 
   const loadOrders = useCallback(async () => {
     setListStatus("loading")
@@ -26,6 +30,7 @@ function OrdersPage({ isAdmin, onLogout, fetchOrders, fetchOrderById }: OrdersPa
     setSelectedOrder(null)
     setDetailStatus("idle")
     setDetailError(null)
+    setActionMessage(null)
 
     try {
       const data = await fetchOrders()
@@ -40,6 +45,7 @@ function OrdersPage({ isAdmin, onLogout, fetchOrders, fetchOrderById }: OrdersPa
   const loadOrderDetail = useCallback(async (orderId: string) => {
     setDetailStatus("loading")
     setDetailError(null)
+    setActionMessage(null)
 
     try {
       const data = await fetchOrderById(orderId)
@@ -50,6 +56,23 @@ function OrdersPage({ isAdmin, onLogout, fetchOrders, fetchOrderById }: OrdersPa
       setDetailError(err instanceof Error ? err.message : "注文詳細の取得に失敗しました。")
     }
   }, [fetchOrderById])
+
+  const handleChangeStatus = useCallback(async (orderId: string, nextStatus: string) => {
+    setIsStatusChanging(true)
+    setDetailError(null)
+    setActionMessage(null)
+    try {
+      const result = await changeOrderStatus(orderId, nextStatus)
+      if (!result.ok) {
+        setDetailError(result.message)
+        return
+      }
+      setActionMessage(result.message)
+      await Promise.all([loadOrders(), loadOrderDetail(orderId)])
+    } finally {
+      setIsStatusChanging(false)
+    }
+  }, [changeOrderStatus, loadOrderDetail, loadOrders])
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
@@ -158,6 +181,25 @@ function OrdersPage({ isAdmin, onLogout, fetchOrders, fetchOrderById }: OrdersPa
                 <p className="text-xs text-zinc-400">ステータス</p>
                 <p className="text-sm text-zinc-100">{getOrderStatusMeta(selectedOrder.status).label}</p>
               </div>
+              {isAdmin && (
+                <div>
+                  <p className="text-xs text-zinc-400">ステータス更新</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {getAllowedOrderStatusTransitions(selectedOrder.status).map((transition) => (
+                      <Button
+                        key={transition.nextStatus}
+                        disabled={isStatusChanging}
+                        onClick={() => void handleChangeStatus(selectedOrder.id, transition.nextStatus)}
+                      >
+                        {transition.label}
+                      </Button>
+                    ))}
+                    {getAllowedOrderStatusTransitions(selectedOrder.status).length === 0 && (
+                      <p className="text-sm text-zinc-400">この注文は遷移可能な次ステータスがありません。</p>
+                    )}
+                  </div>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-zinc-400">明細</p>
                 <ul className="mt-2 space-y-2">
@@ -168,6 +210,25 @@ function OrdersPage({ isAdmin, onLogout, fetchOrders, fetchOrderById }: OrdersPa
                   ))}
                 </ul>
               </div>
+              <div>
+                <p className="text-xs text-zinc-400">変更履歴</p>
+                <ul className="mt-2 space-y-2">
+                  {(selectedOrder.statusHistories ?? []).map((history) => (
+                    <li key={history.id} className="rounded-lg border border-zinc-600/45 bg-zinc-900/55 px-3 py-2 text-sm text-zinc-200">
+                      <p>{new Date(history.createdAtUtc).toLocaleString("ja-JP")} / {getOrderStatusMeta(history.status).label}</p>
+                      <p className="text-zinc-400">メモ: {history.note}</p>
+                    </li>
+                  ))}
+                  {(selectedOrder.statusHistories ?? []).length === 0 && (
+                    <li className="text-sm text-zinc-400">履歴はありません。</li>
+                  )}
+                </ul>
+              </div>
+              {actionMessage && (
+                <p className="rounded-xl border border-emerald-500/40 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200">
+                  {actionMessage}
+                </p>
+              )}
             </div>
           )}
         </aside>

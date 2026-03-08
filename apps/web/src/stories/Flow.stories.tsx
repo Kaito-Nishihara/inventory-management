@@ -120,6 +120,7 @@ function StoryFlowApp() {
         createdAtUtc: now.toISOString(),
         updatedAtUtc: now.toISOString(),
         items: [{ productId: item.productId, quantity: item.quantity }],
+        statusHistories: [{ id: `${now.getTime()}-${idx}-h1`, status: "accepted", note: "order_created", createdAtUtc: now.toISOString() }],
       }))
       setOrders((prev) => [...newOrders, ...prev])
       setCartItems([])
@@ -242,6 +243,7 @@ function StoryFlowApp() {
               onLogout={handleLogout}
               fetchOrders={async () => orders}
               fetchOrderById={fetchOrderById}
+              changeOrderStatus={async () => ({ ok: true, message: "ステータス更新に成功しました。" })}
             />
           ) : (
             <Navigate to="/login" replace />
