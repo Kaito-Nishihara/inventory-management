@@ -1,5 +1,5 @@
 // order schema
-// GeneratedAtUtc: 2026-03-07T23:52:56Z
+// GeneratedAtUtc: 2026-03-08T01:22:30Z
 
 Table order.order_items {
   Id uuid [pk,not null]
