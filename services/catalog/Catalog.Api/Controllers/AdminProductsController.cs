@@ -84,7 +84,7 @@ public class AdminProductsController(IProductService productService) : Controlle
 
         if (!updated)
         {
-            return NotFound();
+            return this.ToProblem(StatusCodes.Status404NotFound, ApiErrorCodes.ProductNotFound);
         }
 
         return NoContent();
@@ -108,7 +108,7 @@ public class AdminProductsController(IProductService productService) : Controlle
 
         if (!updated)
         {
-            return NotFound();
+            return this.ToProblem(StatusCodes.Status404NotFound, ApiErrorCodes.ProductNotFound);
         }
 
         return NoContent();

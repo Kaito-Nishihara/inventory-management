@@ -1,4 +1,5 @@
 using Identity.Api.Infrastructure;
+using Backend.Validation;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,6 +10,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace Identity.Api.Tests;
@@ -59,6 +61,24 @@ public class AuthControllerTests(IdentityApiFactory factory) : IClassFixture<Ide
         var response = await client.PostAsJsonAsync("/auth/login", new LoginRequest("wrong@test.com", "invalid"));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(ApiErrorCodes.InvalidCredentials, doc.RootElement.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Register_InvalidPayload_ReturnsValidationProblemDetails()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        var response = await client.PostAsJsonAsync("/auth/register", new RegisterRequest("", "short"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(ApiErrorCodes.ValidationError, doc.RootElement.GetProperty("code").GetString());
+        Assert.True(doc.RootElement.GetProperty("errors").TryGetProperty("Email", out _));
     }
 
     [Fact]

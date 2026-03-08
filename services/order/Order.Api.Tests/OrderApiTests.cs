@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc.Testing;
+using Backend.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Order.Api.Infrastructure.Clients;
@@ -8,6 +9,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using Microsoft.IdentityModel.Tokens;
 using Xunit;
 
@@ -33,6 +35,8 @@ public class OrderApiTests(OrderApiFactory factory) : IClassFixture<OrderApiFact
         using var client = CreateUserClient();
         var response = await client.PostAsJsonAsync("/orders", new CreateOrderRequest(Guid.NewGuid(), 2));
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(ApiErrorCodes.InsufficientAvailable, doc.RootElement.GetProperty("code").GetString());
     }
 
     [Fact]
@@ -59,6 +63,8 @@ public class OrderApiTests(OrderApiFactory factory) : IClassFixture<OrderApiFact
 
         var invalid = await adminClient.PostAsJsonAsync($"/admin/orders/{orderId}/status", new ChangeOrderStatusRequest("accepted"));
         Assert.Equal(HttpStatusCode.Conflict, invalid.StatusCode);
+        using var invalidDoc = JsonDocument.Parse(await invalid.Content.ReadAsStringAsync());
+        Assert.Equal(ApiErrorCodes.InvalidTransition, invalidDoc.RootElement.GetProperty("code").GetString());
     }
 
     [Fact]

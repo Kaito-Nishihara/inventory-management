@@ -28,7 +28,7 @@ public class AuthController(IAuthService authService) : ControllerBase
 
         if (result.Status == RegisterStatus.Conflict)
         {
-            return Conflict("Email already exists");
+            return this.ToProblem(StatusCodes.Status409Conflict, ApiErrorCodes.DuplicateEmail, "Email already exists");
         }
 
         return CreatedAtAction(nameof(Register), new { userId = result.UserId }, null);
@@ -51,7 +51,7 @@ public class AuthController(IAuthService authService) : ControllerBase
 
         if (result is null)
         {
-            return Unauthorized();
+            return this.ToProblem(StatusCodes.Status401Unauthorized, ApiErrorCodes.InvalidCredentials);
         }
 
         return Ok(new AuthTokensResponse(result.AccessToken, result.RefreshToken));
@@ -71,7 +71,7 @@ public class AuthController(IAuthService authService) : ControllerBase
         var result = await _authService.RefreshAsync(new RefreshCommand(request.RefreshToken), cancellationToken);
         if (result is null)
         {
-            return Unauthorized();
+            return this.ToProblem(StatusCodes.Status401Unauthorized, ApiErrorCodes.InvalidOrExpiredRefreshToken);
         }
 
         return Ok(new AuthTokensResponse(result.AccessToken, result.RefreshToken));
@@ -91,7 +91,7 @@ public class AuthController(IAuthService authService) : ControllerBase
         var success = await _authService.RevokeAsync(new RevokeCommand(request.RefreshToken), cancellationToken);
         if (!success)
         {
-            return Unauthorized();
+            return this.ToProblem(StatusCodes.Status401Unauthorized, ApiErrorCodes.InvalidOrExpiredRefreshToken);
         }
 
         return NoContent();
