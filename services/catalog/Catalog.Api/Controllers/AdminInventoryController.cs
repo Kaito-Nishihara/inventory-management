@@ -225,11 +225,11 @@ public class AdminInventoryController(IInventoryService inventoryService) : Cont
         return result.Status switch
         {
             InventoryUpdateStatus.Success => NoContent(),
-            InventoryUpdateStatus.NotFound => NotFound(),
-            InventoryUpdateStatus.VersionConflict => Conflict("version_conflict"),
-            InventoryUpdateStatus.InsufficientAvailable => Conflict("insufficient_available"),
-            InventoryUpdateStatus.InvalidOnHand => BadRequest("invalid_on_hand"),
-            _ => BadRequest("invalid_quantity")
+            InventoryUpdateStatus.NotFound => this.ToProblem(StatusCodes.Status404NotFound, ApiErrorCodes.ProductNotFound),
+            InventoryUpdateStatus.VersionConflict => this.ToProblem(StatusCodes.Status409Conflict, ApiErrorCodes.VersionConflict),
+            InventoryUpdateStatus.InsufficientAvailable => this.ToProblem(StatusCodes.Status409Conflict, ApiErrorCodes.InsufficientAvailable),
+            InventoryUpdateStatus.InvalidOnHand => this.ToProblem(StatusCodes.Status400BadRequest, ApiErrorCodes.InvalidOnHand),
+            _ => this.ToProblem(StatusCodes.Status400BadRequest, ApiErrorCodes.InvalidQuantity)
         };
     }
 
@@ -242,13 +242,13 @@ public class AdminInventoryController(IInventoryService inventoryService) : Cont
         {
             TransferLocationInventoryStatus.Success when createdTransferId.HasValue => Created($"/admin/inventory/transfers/{createdTransferId.Value}", new LocationTransferCreatedResponse(createdTransferId.Value)),
             TransferLocationInventoryStatus.Success => NoContent(),
-            TransferLocationInventoryStatus.TransferNotFound => NotFound("transfer_not_found"),
-            TransferLocationInventoryStatus.ProductNotFound => NotFound("product_not_found"),
-            TransferLocationInventoryStatus.LocationNotFound => NotFound("location_not_found"),
-            TransferLocationInventoryStatus.InsufficientStock => Conflict("insufficient_stock"),
-            TransferLocationInventoryStatus.ConcurrencyConflict => Conflict("concurrency_conflict"),
-            TransferLocationInventoryStatus.InvalidStatus => Conflict("invalid_status"),
-            _ => BadRequest("invalid_request")
+            TransferLocationInventoryStatus.TransferNotFound => this.ToProblem(StatusCodes.Status404NotFound, ApiErrorCodes.TransferNotFound),
+            TransferLocationInventoryStatus.ProductNotFound => this.ToProblem(StatusCodes.Status404NotFound, ApiErrorCodes.ProductNotFound),
+            TransferLocationInventoryStatus.LocationNotFound => this.ToProblem(StatusCodes.Status404NotFound, ApiErrorCodes.LocationNotFound),
+            TransferLocationInventoryStatus.InsufficientStock => this.ToProblem(StatusCodes.Status409Conflict, ApiErrorCodes.InsufficientStock),
+            TransferLocationInventoryStatus.ConcurrencyConflict => this.ToProblem(StatusCodes.Status409Conflict, ApiErrorCodes.ConcurrencyConflict),
+            TransferLocationInventoryStatus.InvalidStatus => this.ToProblem(StatusCodes.Status409Conflict, ApiErrorCodes.InvalidStatus),
+            _ => this.ToProblem(StatusCodes.Status400BadRequest, ApiErrorCodes.InvalidRequest)
         };
     }
 }

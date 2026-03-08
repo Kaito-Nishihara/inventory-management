@@ -37,8 +37,8 @@ public class OrdersController(IOrderService orderService) : ControllerBase
         return result.Status switch
         {
             CreateOrderStatus.Created => Created($"/orders/{result.OrderId}", new CreateOrderResponse(result.OrderId!.Value)),
-            CreateOrderStatus.InventoryUnavailable => Conflict("insufficient_available"),
-            _ => BadRequest("invalid_quantity")
+            CreateOrderStatus.InventoryUnavailable => this.ToProblem(StatusCodes.Status409Conflict, ApiErrorCodes.InsufficientAvailable),
+            _ => this.ToProblem(StatusCodes.Status400BadRequest, ApiErrorCodes.InvalidQuantity)
         };
     }
 
@@ -73,7 +73,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
         var order = await _orderService.GetByIdAsync(orderId, userId, isAdmin, cancellationToken);
         if (order is null)
         {
-            return NotFound();
+            return this.ToProblem(StatusCodes.Status404NotFound, ApiErrorCodes.OrderNotFound);
         }
 
         return Ok(Map(order));
@@ -123,9 +123,9 @@ public class AdminOrdersController(IOrderService orderService) : ControllerBase
         return result switch
         {
             ChangeOrderStatusResult.Success => NoContent(),
-            ChangeOrderStatusResult.NotFound => NotFound(),
-            ChangeOrderStatusResult.InventoryReleaseFailed => Conflict("inventory_release_failed"),
-            _ => Conflict("invalid_transition")
+            ChangeOrderStatusResult.NotFound => this.ToProblem(StatusCodes.Status404NotFound, ApiErrorCodes.OrderNotFound),
+            ChangeOrderStatusResult.InventoryReleaseFailed => this.ToProblem(StatusCodes.Status409Conflict, ApiErrorCodes.InventoryReleaseFailed),
+            _ => this.ToProblem(StatusCodes.Status409Conflict, ApiErrorCodes.InvalidTransition)
         };
     }
 }

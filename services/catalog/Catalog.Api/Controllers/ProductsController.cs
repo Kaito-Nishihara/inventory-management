@@ -1,4 +1,5 @@
 using Catalog.Api.Application.Products;
+using Backend.Validation;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Catalog.Api.Controllers;
@@ -59,7 +60,7 @@ public class ProductsController(IProductService productService) : ControllerBase
         var product = await _productService.GetPublishedByIdAsync(productId, cancellationToken);
         if (product is null)
         {
-            return NotFound();
+            return this.ToProblem(StatusCodes.Status404NotFound, ApiErrorCodes.ProductNotFound);
         }
 
         return Ok(Map(product));

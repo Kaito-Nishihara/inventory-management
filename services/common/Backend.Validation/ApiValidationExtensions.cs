@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Backend.Validation;
@@ -12,9 +13,14 @@ public static class ApiValidationExtensions
         {
             options.InvalidModelStateResponseFactory = context =>
             {
-                return new BadRequestObjectResult(new ValidationErrorResponse(
-                    "validation_error",
-                    ToErrors(context.ModelState)));
+                var payload = new ValidationProblemDetails(ToErrors(context.ModelState))
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "One or more validation errors occurred.",
+                    Type = "https://httpstatuses.com/400"
+                };
+                payload.Extensions["code"] = ApiErrorCodes.ValidationError;
+                return new BadRequestObjectResult(payload);
             };
         });
 
@@ -34,5 +40,3 @@ public static class ApiValidationExtensions
                     .ToArray());
     }
 }
-
-public sealed record ValidationErrorResponse(string Code, IReadOnlyDictionary<string, string[]> Errors);

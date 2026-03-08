@@ -1,4 +1,5 @@
 using Catalog.Api.Infrastructure;
+using Backend.Validation;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,6 +9,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using Microsoft.IdentityModel.Tokens;
 using Xunit;
 
@@ -110,6 +112,27 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
 
         var issue = await client.PostAsJsonAsync("/admin/inventory/issue", new InventoryQuantityRequest(created.ProductId, 11, 1, "over-issue"));
         Assert.Equal(HttpStatusCode.Conflict, issue.StatusCode);
+        using var issueDoc = JsonDocument.Parse(await issue.Content.ReadAsStringAsync());
+        Assert.Equal(ApiErrorCodes.InsufficientAvailable, issueDoc.RootElement.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task CreateProduct_InvalidPayload_ReturnsValidationProblemDetails()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken("1", "admin"));
+
+        var categoryId = await GetAnyCategoryIdAsync(client);
+        var response = await client.PostAsJsonAsync("/admin/products", new CreateProductRequest(categoryId, "", "", 0));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(ApiErrorCodes.ValidationError, doc.RootElement.GetProperty("code").GetString());
+        Assert.True(doc.RootElement.GetProperty("errors").TryGetProperty("Name", out _));
     }
 
     [Fact]
