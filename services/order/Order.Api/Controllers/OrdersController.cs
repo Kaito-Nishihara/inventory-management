@@ -87,7 +87,12 @@ public class OrdersController(IOrderService orderService) : ControllerBase
             x.Status,
             x.CreatedAtUtc,
             x.UpdatedAtUtc,
-            x.Items.Select(i => new OrderItemResponse(i.ProductId, i.Quantity)).ToList());
+            x.Items.Select(i => new OrderItemResponse(i.ProductId, i.Quantity)).ToList(),
+            x.StatusHistories.Select(h => new OrderStatusHistoryResponse(
+                h.Id,
+                h.Status,
+                h.Note,
+                h.CreatedAtUtc)).ToList());
     }
 }
 
@@ -137,5 +142,7 @@ public sealed record OrderResponse(
     string Status,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
-    IReadOnlyList<OrderItemResponse> Items);
+    IReadOnlyList<OrderItemResponse> Items,
+    IReadOnlyList<OrderStatusHistoryResponse> StatusHistories);
 public sealed record OrderItemResponse(Guid ProductId, int Quantity);
+public sealed record OrderStatusHistoryResponse(Guid Id, string Status, string Note, DateTime CreatedAtUtc);

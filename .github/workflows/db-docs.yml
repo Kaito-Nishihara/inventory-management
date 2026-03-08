@@ -4,12 +4,8 @@ permissions:
   contents: write
 
 on:
+  workflow_call:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "services/**"
-      - "scripts/db-docs/**"
-      - ".github/workflows/db-docs.yml"
   push:
     branches:
       - main

@@ -81,11 +81,15 @@ describe("App login", () => {
     await waitFor(() => {
       expect(screen.getByText("商品一覧")).toBeInTheDocument()
     })
-    expect(globalThis.fetch).toHaveBeenCalledWith("http://localhost:5002/categories", {
-      headers: {
-        Authorization: "Bearer access-token-for-test-1234567890",
-      },
-    })
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:5002/categories",
+      expect.objectContaining({
+        headers: expect.any(Headers),
+      }),
+    )
+    const firstCallHeaders = (vi.mocked(globalThis.fetch).mock.calls[0]?.[1] as RequestInit | undefined)?.headers as Headers
+    expect(firstCallHeaders.get("Authorization")).toBe("Bearer access-token-for-test-1234567890")
+    expect(localStorage.getItem("inventory.refresh_token")).toBe("refresh-token")
   })
 
   it("shows validation error when backend returns 401", async () => {
