@@ -1,7 +1,7 @@
 # Database Definition
 
 - Database: `invdb`
-- GeneratedAtUtc: `2026-03-08T01:22:27Z`
+- GeneratedAtUtc: `2026-03-08T04:51:50Z`
 
 ## Schemas
 - [identity](identity/README.md)
