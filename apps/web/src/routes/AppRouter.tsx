@@ -6,6 +6,7 @@ import { getRoleFromJwt } from "../features/auth/tokenRole"
 import type { CartItem, CategoryResponse, ProductListResponse, ProductResponse } from "../features/catalog/types"
 import { mapValidationMessageFromResponse } from "../features/validation/messages"
 import type { CheckoutExecutionResult, CheckoutLineResult } from "../features/order/checkoutSummary"
+import { mapOrderStatusChangeError } from "../features/order/orderStatusTransitions"
 import type { OrderResponse } from "../features/order/types"
 import type {
   AuthAuditLogResponse,
@@ -652,6 +653,39 @@ function AppRouter() {
     [mapApiErrorResponse, orderBaseUrl, token],
   )
 
+  const changeOrderStatus = useCallback(
+    async (orderId: string, nextStatus: string): Promise<{ ok: boolean; message: string }> => {
+      if (!token) {
+        return { ok: false, message: "JWT がありません。再ログインしてください。" }
+      }
+
+      const response = await fetch(`${orderBaseUrl}/admin/orders/${orderId}/status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ nextStatus }),
+      })
+
+      if (response.status === 204) {
+        return { ok: true, message: `注文ステータスを「${nextStatus}」へ更新しました。` }
+      }
+
+      if (response.status === 404) {
+        return { ok: false, message: mapOrderStatusChangeError("not_found") }
+      }
+
+      const code = (await response.text()).replaceAll('"', "")
+      if (response.status === 409) {
+        return { ok: false, message: mapOrderStatusChangeError(code) }
+      }
+
+      return { ok: false, message: await mapApiErrorResponse(response) }
+    },
+    [mapApiErrorResponse, orderBaseUrl, token],
+  )
+
   const handleAddToCart = (product: ProductResponse) => {
     setCartItems((prev) => {
       const existing = prev.find((x) => x.productId === product.id)
@@ -896,7 +930,13 @@ function AppRouter() {
         path="/orders"
         element={
           token ? (
-            <OrdersPage isAdmin={isAdmin} onLogout={handleLogout} fetchOrders={fetchOrders} fetchOrderById={fetchOrderById} />
+            <OrdersPage
+              isAdmin={isAdmin}
+              onLogout={handleLogout}
+              fetchOrders={fetchOrders}
+              fetchOrderById={fetchOrderById}
+              changeOrderStatus={changeOrderStatus}
+            />
           ) : (
             <Navigate to="/login" replace />
           )

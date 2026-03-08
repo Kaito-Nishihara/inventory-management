@@ -51,6 +51,9 @@ const orderList: OrderResponse[] = [
     createdAtUtc: "2026-02-28T08:30:00Z",
     updatedAtUtc: "2026-02-28T08:30:00Z",
     items: [{ productId: "p-1", quantity: 1 }],
+    statusHistories: [
+      { id: "h-1", status: "accepted", note: "order_created", createdAtUtc: "2026-02-28T08:30:00Z" },
+    ],
   },
   {
     id: "8f4f1bb8-8eaf-4e2d-9ec6-c52a49d2f002",
@@ -59,6 +62,10 @@ const orderList: OrderResponse[] = [
     createdAtUtc: "2026-02-28T07:10:00Z",
     updatedAtUtc: "2026-02-28T09:00:00Z",
     items: [{ productId: "p-2", quantity: 1 }],
+    statusHistories: [
+      { id: "h-2", status: "accepted", note: "order_created", createdAtUtc: "2026-02-28T07:10:00Z" },
+      { id: "h-3", status: "shipped", note: "status_changed", createdAtUtc: "2026-02-28T09:00:00Z" },
+    ],
   },
 ]
 
@@ -166,7 +173,13 @@ export const Checkout: Story = {
 export const Orders: Story = {
   render: () => (
     <MemoryRouter>
-      <OrdersPage isAdmin onLogout={() => {}} fetchOrders={fetchOrders} fetchOrderById={fetchOrderById} />
+      <OrdersPage
+        isAdmin
+        onLogout={() => {}}
+        fetchOrders={fetchOrders}
+        fetchOrderById={fetchOrderById}
+        changeOrderStatus={async () => ({ ok: true, message: "ステータス更新に成功しました。" })}
+      />
     </MemoryRouter>
   ),
 }

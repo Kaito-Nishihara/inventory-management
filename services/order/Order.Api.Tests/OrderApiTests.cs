@@ -81,6 +81,35 @@ public class OrderApiTests(OrderApiFactory factory) : IClassFixture<OrderApiFact
         Assert.Equal(HttpStatusCode.Conflict, cancel.StatusCode);
     }
 
+    [Fact]
+    public async Task GetById_IncludesStatusHistories()
+    {
+        factory.Gateway.SetReserveResult(new ReserveResult(true, string.Empty));
+        factory.Gateway.SetReleaseResult(new ReleaseResult(true, string.Empty));
+
+        Guid orderId;
+        using (var userClient = CreateUserClient())
+        {
+            var create = await userClient.PostAsJsonAsync("/orders", new CreateOrderRequest(Guid.NewGuid(), 1));
+            var payload = await create.Content.ReadFromJsonAsync<CreateOrderResponse>();
+            Assert.NotNull(payload);
+            orderId = payload!.OrderId;
+        }
+
+        using (var adminClient = CreateAdminClient())
+        {
+            var ship = await adminClient.PostAsJsonAsync($"/admin/orders/{orderId}/status", new ChangeOrderStatusRequest("shipped"));
+            Assert.Equal(HttpStatusCode.NoContent, ship.StatusCode);
+        }
+
+        using var detailClient = CreateAdminClient();
+        var detail = await detailClient.GetFromJsonAsync<OrderResponse>($"/orders/{orderId}");
+        Assert.NotNull(detail);
+        Assert.NotNull(detail!.StatusHistories);
+        Assert.True(detail.StatusHistories.Count >= 2);
+        Assert.Equal("shipped", detail.StatusHistories.First().Status);
+    }
+
     private HttpClient CreateUserClient()
     {
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -123,6 +152,9 @@ public class OrderApiTests(OrderApiFactory factory) : IClassFixture<OrderApiFact
     public sealed record CreateOrderRequest(Guid ProductId, int Quantity);
     public sealed record CreateOrderResponse(Guid OrderId);
     public sealed record ChangeOrderStatusRequest(string NextStatus);
+    public sealed record OrderResponse(Guid Id, string UserId, string Status, DateTime CreatedAtUtc, DateTime UpdatedAtUtc, IReadOnlyList<OrderItemResponse> Items, IReadOnlyList<OrderStatusHistoryResponse> StatusHistories);
+    public sealed record OrderItemResponse(Guid ProductId, int Quantity);
+    public sealed record OrderStatusHistoryResponse(Guid Id, string Status, string Note, DateTime CreatedAtUtc);
 }
 
 public class OrderApiFactory : WebApplicationFactory<Program>

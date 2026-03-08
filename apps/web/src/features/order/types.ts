@@ -10,4 +10,12 @@ export type OrderResponse = {
   createdAtUtc: string
   updatedAtUtc: string
   items: OrderItemResponse[]
+  statusHistories?: OrderStatusHistoryResponse[]
+}
+
+export type OrderStatusHistoryResponse = {
+  id: string
+  status: string
+  note: string
+  createdAtUtc: string
 }
