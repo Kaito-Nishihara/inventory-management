@@ -6,7 +6,7 @@ import type { AuthAuditLogResponse, InventoryTransactionResponse } from "../feat
 
 type AdminInventoryAuditPageProps = {
   onLogout: () => void
-  fetchProductsPage: (query: {
+  fetchAdminProductsPage: (query: {
     q?: string
     categoryId?: string
     sort?: string
@@ -30,7 +30,7 @@ function getAuditActionLabel(action: string): string {
 
 function AdminInventoryAuditPage({
   onLogout,
-  fetchProductsPage,
+  fetchAdminProductsPage,
   fetchTransactions,
   fetchAuthAuditLogs,
 }: AdminInventoryAuditPageProps) {
@@ -54,12 +54,12 @@ function AdminInventoryAuditPage({
   )
 
   const loadProducts = useCallback(async () => {
-    const result = await fetchProductsPage({ page: 1, pageSize: 30, sort: "newest" })
+    const result = await fetchAdminProductsPage({ page: 1, pageSize: 30, sort: "newest" })
     setProducts(result.items)
     if (!selectedProductId && result.items.length > 0) {
       setSelectedProductId(result.items[0].id)
     }
-  }, [fetchProductsPage, selectedProductId])
+  }, [fetchAdminProductsPage, selectedProductId])
 
   const loadAuditData = useCallback(async () => {
     if (!selectedProductId) {

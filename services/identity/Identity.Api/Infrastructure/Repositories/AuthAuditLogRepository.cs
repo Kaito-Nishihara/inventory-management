@@ -43,7 +43,7 @@ public class AuthAuditLogRepository(IdentityDbContext db) : IAuthAuditLogReposit
 
         if (toUtc.HasValue)
         {
-            query = query.Where(x => x.CreatedAtUtc <= toUtc.Value);
+            query = query.Where(x => x.CreatedAtUtc < toUtc.Value);
         }
 
         return await query

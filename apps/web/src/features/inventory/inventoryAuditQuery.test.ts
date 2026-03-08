@@ -15,6 +15,6 @@ describe("buildInventoryAuditQuery", () => {
 
     expect(query).toContain("take=50")
     expect(query).toContain("fromUtc=2026-03-01T00%3A00%3A00.000Z")
-    expect(query).toContain("toUtc=2026-03-08T23%3A59%3A59.999Z")
+    expect(query).toContain("toUtc=2026-03-09T00%3A00%3A00.000Z")
   })
 })

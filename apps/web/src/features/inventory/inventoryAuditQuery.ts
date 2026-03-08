@@ -4,6 +4,12 @@ type InventoryAuditQueryInput = {
   toDate?: string
 }
 
+function toExclusiveEndDateIso(dateText: string): string {
+  const date = new Date(`${dateText}T00:00:00.000Z`)
+  date.setUTCDate(date.getUTCDate() + 1)
+  return date.toISOString()
+}
+
 export function buildInventoryAuditQuery(input: InventoryAuditQueryInput): string {
   const params = new URLSearchParams()
   params.set("take", String(input.take))
@@ -13,7 +19,7 @@ export function buildInventoryAuditQuery(input: InventoryAuditQueryInput): strin
   }
 
   if (input.toDate) {
-    params.set("toUtc", `${input.toDate}T23:59:59.999Z`)
+    params.set("toUtc", toExclusiveEndDateIso(input.toDate))
   }
 
   return params.toString()

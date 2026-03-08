@@ -975,7 +975,7 @@ function AppRouter() {
             isAdmin ? (
               <AdminInventoryAuditPage
                 onLogout={handleLogout}
-                fetchProductsPage={fetchProductsPage}
+                fetchAdminProductsPage={fetchAdminProductsPage}
                 fetchTransactions={fetchTransactions}
                 fetchAuthAuditLogs={fetchAuthAuditLogs}
               />
