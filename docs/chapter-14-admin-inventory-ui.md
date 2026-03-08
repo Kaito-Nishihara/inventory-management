@@ -61,3 +61,21 @@
 - 出荷確定で移動元在庫が減る
 - 入荷確定で移動先在庫が増える
 - 移動履歴に記録が表示される
+
+## 14-5. 追加対応（管理者向け在庫操作UI）
+
+第14章の拡張として、管理者が商品在庫を直接操作する画面を追加しました。
+
+- 画面ルート: `/admin/inventory/operations`（admin ロール限定）
+- 操作: 入庫 / 出庫 / 棚卸調整
+- 競合時: `409 version_conflict` で再取得導線を表示
+- テスト: 単体テスト + E2E を追加
+
+## 14-6. 関連Issue
+
+- https://github.com/Kaito-Nishihara/inventory-management/issues/15
+
+## 14-7. 対応PR
+
+- ロケーション在庫と移動ステータス: https://github.com/Kaito-Nishihara/inventory-management/pull/42
+- 在庫操作UI（入庫/出庫/棚卸）: https://github.com/Kaito-Nishihara/inventory-management/pull/45

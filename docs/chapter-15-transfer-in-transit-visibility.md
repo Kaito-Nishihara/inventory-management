@@ -3,6 +3,11 @@
 第14章で拠点間移動をステータス化しました。  
 第15章では、運用判断に必要な「移動中在庫」をロケーション在庫APIと管理UIに追加します。
 
+このリポジトリでは第15章を次の2ステップで実装しています。
+
+- 15-A: 移動中在庫の可視化（In-Transit）
+- 15-B: 管理者の商品管理UI（作成/更新/公開切替）
+
 ## 15-1. この章のゴール
 
 - ロケーション在庫に `移動中出荷` / `移動中入荷` を表示できる
@@ -38,3 +43,22 @@
 - 入荷確定後:
   - 移動先 `onHand` 増加
   - `inTransitOut/inTransitIn` が双方 0 に戻る
+
+## 15-6. 追加対応（管理者の商品管理UI）
+
+第15章の実運用拡張として、管理者が商品マスタを運用できる画面を追加しました。
+
+- 画面ルート: `/admin/products`（admin ロール限定）
+- 操作: 商品作成 / 商品更新 / 公開・非公開切替
+- API: `GET /admin/products`, `POST /admin/products`, `PUT /admin/products/{id}`, `POST /admin/products/{id}/publish`
+- エラー表示: `403` / `409` / `404` / バリデーションエラーをUI表示
+- テスト: Unit + E2E + Catalog API テストを追加
+
+## 15-7. 関連Issue
+
+- https://github.com/Kaito-Nishihara/inventory-management/issues/18
+
+## 15-8. 対応PR
+
+- 移動中在庫の可視化: https://github.com/Kaito-Nishihara/inventory-management/pull/43
+- 管理者の商品管理UI: https://github.com/Kaito-Nishihara/inventory-management/pull/46

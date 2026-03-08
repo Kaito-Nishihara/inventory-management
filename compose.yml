@@ -23,8 +23,8 @@ services:
 
   identity-api:
     build:
-      context: ./services/identity/Identity.Api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/identity/Identity.Api/Dockerfile
     container_name: inv-identity-api
     ports:
       - "5001:8080"
@@ -33,8 +33,8 @@ services:
 
   catalog-api:
     build:
-      context: ./services/catalog/Catalog.Api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/catalog/Catalog.Api/Dockerfile
     container_name: inv-catalog-api
     environment:
       CatalogSeed__BulkProductCount: "100000"
@@ -46,8 +46,8 @@ services:
 
   order-api:
     build:
-      context: ./services/order/Order.Api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/order/Order.Api/Dockerfile
     container_name: inv-order-api
     ports:
       - "5003:8080"

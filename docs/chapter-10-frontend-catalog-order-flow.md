@@ -87,7 +87,7 @@ Products画面上部に共通ヘッダーを追加しました。
 
 ## 10-10. PR
 
-- （この章のPRリンクを追記）
+- https://github.com/Kaito-Nishihara/inventory-management/pull/35
 
 ## 10-11. 今後の拡張予定
 
@@ -100,4 +100,4 @@ Products画面上部に共通ヘッダーを追加しました。
 これにより、商品数が増えても目的の商品へ到達しやすいUIを目指します。
 
 対応Issue:
-- https://github.com/Kaito-Nishihara/inventory-management/issues/12
+- https://github.com/Kaito-Nishihara/inventory-management/issues/11
