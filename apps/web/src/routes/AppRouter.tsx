@@ -17,6 +17,7 @@ import type {
 } from "../features/inventory/types"
 import AdminInventoryPage from "../pages/AdminInventoryPage"
 import AdminInventoryOperationsPage from "../pages/AdminInventoryOperationsPage"
+import AdminProductsPage from "../pages/AdminProductsPage"
 import CheckoutPage from "../pages/CheckoutPage"
 import LoginPage from "../pages/LoginPage"
 import OrdersPage from "../pages/OrdersPage"
@@ -140,6 +141,109 @@ function AppRouter() {
       return (await response.json()) as ProductResponse
     },
     [catalogBaseUrl, mapApiErrorResponse],
+  )
+
+  const createAdminProduct = useCallback(
+    async (draft: {
+      categoryId: string
+      name: string
+      description: string
+      price: number
+    }): Promise<{ ok: boolean; code?: string; message: string; productId?: string }> => {
+      if (!token) {
+        return { ok: false, message: "JWT がありません。再ログインしてください。" }
+      }
+
+      const response = await fetch(`${catalogBaseUrl}/admin/products`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(draft),
+      })
+
+      if (response.status === 201) {
+        const body = (await response.json()) as { productId?: string }
+        return { ok: true, message: "商品を作成しました。", productId: body.productId }
+      }
+
+      if (response.status === 400) {
+        return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
+      }
+
+      const code = (await response.text()).replaceAll('"', "")
+      return { ok: false, code, message: await mapApiErrorResponse(response) }
+    },
+    [catalogBaseUrl, mapApiErrorResponse, token],
+  )
+
+  const updateAdminProduct = useCallback(
+    async (
+      productId: string,
+      draft: {
+        categoryId: string
+        name: string
+        description: string
+        price: number
+      },
+    ): Promise<{ ok: boolean; code?: string; message: string }> => {
+      if (!token) {
+        return { ok: false, message: "JWT がありません。再ログインしてください。" }
+      }
+
+      const response = await fetch(`${catalogBaseUrl}/admin/products/${productId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(draft),
+      })
+
+      if (response.status === 204) {
+        return { ok: true, message: "商品情報を更新しました。" }
+      }
+
+      if (response.status === 404) {
+        return { ok: false, code: "not_found", message: "商品が見つかりません。" }
+      }
+      if (response.status === 400) {
+        return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
+      }
+
+      const code = (await response.text()).replaceAll('"', "")
+      return { ok: false, code, message: await mapApiErrorResponse(response) }
+    },
+    [catalogBaseUrl, mapApiErrorResponse, token],
+  )
+
+  const setAdminProductPublish = useCallback(
+    async (productId: string, isPublished: boolean): Promise<{ ok: boolean; code?: string; message: string }> => {
+      if (!token) {
+        return { ok: false, message: "JWT がありません。再ログインしてください。" }
+      }
+
+      const response = await fetch(`${catalogBaseUrl}/admin/products/${productId}/publish`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isPublished }),
+      })
+
+      if (response.status === 204) {
+        return { ok: true, message: isPublished ? "商品を公開しました。" : "商品を非公開にしました。" }
+      }
+      if (response.status === 404) {
+        return { ok: false, code: "not_found", message: "商品が見つかりません。" }
+      }
+
+      const code = (await response.text()).replaceAll('"', "")
+      return { ok: false, code, message: await mapApiErrorResponse(response) }
+    },
+    [catalogBaseUrl, mapApiErrorResponse, token],
   )
 
   const fetchStockLocations = useCallback(async (): Promise<StockLocationResponse[]> => {
@@ -724,6 +828,27 @@ function AppRouter() {
         element={
           token ? (
             <OrdersPage isAdmin={isAdmin} onLogout={handleLogout} fetchOrders={fetchOrders} fetchOrderById={fetchOrderById} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+      <Route
+        path="/admin/products"
+        element={
+          token ? (
+            isAdmin ? (
+              <AdminProductsPage
+                onLogout={handleLogout}
+                fetchCategories={fetchCategories}
+                fetchProductsPage={fetchProductsPage}
+                createAdminProduct={createAdminProduct}
+                updateAdminProduct={updateAdminProduct}
+                setAdminProductPublish={setAdminProductPublish}
+              />
+            ) : (
+              <Navigate to="/products" replace />
+            )
           ) : (
             <Navigate to="/login" replace />
           )
