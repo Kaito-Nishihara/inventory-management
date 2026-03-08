@@ -1,9 +1,10 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 
 function createJwt(role: "admin" | "user"): string {
   const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }))
   const payload = btoa(
     JSON.stringify({
+      role,
       "http://schemas.microsoft.com/ws/2008/06/identity/claims/role": role,
       sub: "2",
     }),
@@ -11,12 +12,49 @@ function createJwt(role: "admin" | "user"): string {
   return `${header}.${payload}.signature`
 }
 
+async function loginAs(page: Page, role: "admin" | "user") {
+  const token = createJwt(role)
+  await page.route("**://localhost:5001/auth/login", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ accessToken: token, refreshToken: "refresh-token" }),
+    })
+  })
+  await page.route("**://localhost:5002/categories", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
+  })
+  await page.route("**://localhost:5002/products?*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ items: [], totalCount: 0, page: 1, pageSize: 20, totalPages: 0 }),
+    })
+  })
+
+  await page.goto("/login")
+  await page.getByRole("button", { name: "ログインする" }).click()
+  await expect(page.getByRole("heading", { name: "商品一覧" })).toBeVisible()
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const token = localStorage.getItem("inventory.jwt")
+        if (!token) return null
+        const [, payload] = token.split(".")
+        if (!payload) return null
+        const normalized = payload.replace(/-/g, "+").replace(/_/g, "/")
+        const padding = "=".repeat((4 - (normalized.length % 4)) % 4)
+        const json = JSON.parse(atob(`${normalized}${padding}`)) as Record<string, unknown>
+        return typeof json.role === "string" ? json.role : null
+      }),
+    )
+    .toBe(role)
+}
+
 const productId = "fe8af9f9-f0b3-45e6-a74f-4cf0b7e10001"
 
 test("user ロールでは監査画面にアクセスできない", async ({ page }) => {
-  await page.addInitScript((token) => {
-    localStorage.setItem("inventory.jwt", token)
-  }, createJwt("user"))
+  await loginAs(page, "user")
 
   await page.route("**://localhost:5002/categories", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
@@ -36,9 +74,7 @@ test("user ロールでは監査画面にアクセスできない", async ({ pag
 })
 
 test("admin が商品/期間フィルタで在庫履歴と監査ログを表示できる", async ({ page }) => {
-  await page.addInitScript((token) => {
-    localStorage.setItem("inventory.jwt", token)
-  }, createJwt("admin"))
+  await loginAs(page, "admin")
 
   let transactionRequestUrl = ""
 
@@ -100,8 +136,18 @@ test("admin が商品/期間フィルタで在庫履歴と監査ログを表示�
       }]),
     })
   })
+  await page.route("**://localhost:5001/auth/refresh", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ accessToken: createJwt("admin"), refreshToken: "refresh-token" }),
+    })
+  })
 
-  await page.goto("/admin/inventory/audit")
+  await page.goto("/admin/products")
+  await expect(page.getByRole("heading", { name: "商品管理（作成/更新/公開切替）" })).toBeVisible()
+  await page.getByRole("button", { name: "在庫管理" }).click()
+  await page.getByRole("button", { name: "在庫監査" }).click()
   await expect(page.getByRole("heading", { name: "在庫履歴・監査ログ" })).toBeVisible()
 
   await page.getByLabel("開始日").fill("2026-03-01")
@@ -117,9 +163,7 @@ test("admin が商品/期間フィルタで在庫履歴と監査ログを表示�
 })
 
 test("APIエラー時にメッセージを表示する", async ({ page }) => {
-  await page.addInitScript((token) => {
-    localStorage.setItem("inventory.jwt", token)
-  }, createJwt("admin"))
+  await loginAs(page, "admin")
 
   await page.route("**://localhost:5002/admin/products?*", async (route) => {
     await route.fulfill({
@@ -154,7 +198,17 @@ test("APIエラー時にメッセージを表示する", async ({ page }) => {
   await page.route("**://localhost:5001/admin/auth-audit-logs?*", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
   })
+  await page.route("**://localhost:5001/auth/refresh", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ accessToken: createJwt("admin"), refreshToken: "refresh-token" }),
+    })
+  })
 
-  await page.goto("/admin/inventory/audit")
+  await page.goto("/admin/products")
+  await expect(page.getByRole("heading", { name: "商品管理（作成/更新/公開切替）" })).toBeVisible()
+  await page.getByRole("button", { name: "在庫管理" }).click()
+  await page.getByRole("button", { name: "在庫監査" }).click()
   await expect(page.getByText("APIエラーが発生しました (500)")).toBeVisible()
 })
