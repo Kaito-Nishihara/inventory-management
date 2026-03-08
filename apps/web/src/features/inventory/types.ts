@@ -51,3 +51,12 @@ export type InventoryOperationResult = {
   code?: string
   message: string
 }
+
+export type AuthAuditLogResponse = {
+  id: string
+  userId?: string | null
+  action: string
+  success: boolean
+  detail?: string | null
+  createdAtUtc: string
+}

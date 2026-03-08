@@ -37,12 +37,26 @@ public class InventoryRepository(CatalogDbContext db) : IInventoryRepository
     public async Task<IReadOnlyList<InventoryTransaction>> GetTransactionsByProductIdAsync(
         Guid productId,
         int take = 20,
+        DateTime? fromUtc = null,
+        DateTime? toUtc = null,
         CancellationToken cancellationToken = default)
     {
         var safeTake = Math.Clamp(take, 1, 100);
-        return await _db.InventoryTransactions
+        var query = _db.InventoryTransactions
             .AsNoTracking()
-            .Where(x => x.ProductId == productId)
+            .Where(x => x.ProductId == productId);
+
+        if (fromUtc.HasValue)
+        {
+            query = query.Where(x => x.CreatedAtUtc >= fromUtc.Value);
+        }
+
+        if (toUtc.HasValue)
+        {
+            query = query.Where(x => x.CreatedAtUtc <= toUtc.Value);
+        }
+
+        return await query
             .OrderByDescending(x => x.CreatedAtUtc)
             .Take(safeTake)
             .ToListAsync(cancellationToken);

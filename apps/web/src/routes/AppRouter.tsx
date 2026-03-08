@@ -8,6 +8,7 @@ import { mapValidationMessageFromResponse } from "../features/validation/message
 import type { CheckoutExecutionResult, CheckoutLineResult } from "../features/order/checkoutSummary"
 import type { OrderResponse } from "../features/order/types"
 import type {
+  AuthAuditLogResponse,
   LocationInventoryStockResponse,
   LocationTransferCreatedResponse,
   LocationInventoryTransferResponse,
@@ -15,7 +16,9 @@ import type {
   InventoryOperationResult,
   InventoryTransactionResponse,
 } from "../features/inventory/types"
+import { buildInventoryAuditQuery } from "../features/inventory/inventoryAuditQuery"
 import AdminInventoryPage from "../pages/AdminInventoryPage"
+import AdminInventoryAuditPage from "../pages/AdminInventoryAuditPage"
 import AdminInventoryOperationsPage from "../pages/AdminInventoryOperationsPage"
 import AdminProductsPage from "../pages/AdminProductsPage"
 import CheckoutPage from "../pages/CheckoutPage"
@@ -562,12 +565,18 @@ function AppRouter() {
   )
 
   const fetchTransactions = useCallback(
-    async (productId: string, take = 20): Promise<InventoryTransactionResponse[]> => {
+    async (
+      productId: string,
+      take = 20,
+      fromDate?: string,
+      toDate?: string,
+    ): Promise<InventoryTransactionResponse[]> => {
       if (!token) {
         throw new Error("JWT がありません。再ログインしてください。")
       }
 
-      const response = await fetch(`${catalogBaseUrl}/admin/inventory/${productId}/transactions?take=${take}`, {
+      const query = buildInventoryAuditQuery({ take, fromDate, toDate })
+      const response = await fetch(`${catalogBaseUrl}/admin/inventory/${productId}/transactions?${query}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -580,6 +589,28 @@ function AppRouter() {
       return (await response.json()) as InventoryTransactionResponse[]
     },
     [catalogBaseUrl, mapApiErrorResponse, token],
+  )
+
+  const fetchAuthAuditLogs = useCallback(
+    async (take = 50, fromDate?: string, toDate?: string): Promise<AuthAuditLogResponse[]> => {
+      if (!token) {
+        throw new Error("JWT がありません。再ログインしてください。")
+      }
+
+      const query = buildInventoryAuditQuery({ take, fromDate, toDate })
+      const response = await fetch(`${identityBaseUrl}/admin/auth-audit-logs?${query}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(await mapApiErrorResponse(response))
+      }
+
+      return (await response.json()) as AuthAuditLogResponse[]
+    },
+    [identityBaseUrl, mapApiErrorResponse, token],
   )
 
   const fetchOrders = useCallback(async (): Promise<OrderResponse[]> => {
@@ -928,6 +959,25 @@ function AppRouter() {
                 issueInventory={issueInventory}
                 adjustInventory={adjustInventory}
                 fetchTransactions={fetchTransactions}
+              />
+            ) : (
+              <Navigate to="/products" replace />
+            )
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+      <Route
+        path="/admin/inventory/audit"
+        element={
+          token ? (
+            isAdmin ? (
+              <AdminInventoryAuditPage
+                onLogout={handleLogout}
+                fetchProductsPage={fetchProductsPage}
+                fetchTransactions={fetchTransactions}
+                fetchAuthAuditLogs={fetchAuthAuditLogs}
               />
             ) : (
               <Navigate to="/products" replace />

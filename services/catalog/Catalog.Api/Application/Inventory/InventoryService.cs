@@ -228,9 +228,16 @@ public class InventoryService(
     public async Task<IReadOnlyList<InventoryTransactionResult>> GetTransactionsAsync(
         Guid productId,
         int take = 20,
+        DateTime? fromUtc = null,
+        DateTime? toUtc = null,
         CancellationToken cancellationToken = default)
     {
-        var rows = await _inventoryRepository.GetTransactionsByProductIdAsync(productId, take, cancellationToken);
+        var rows = await _inventoryRepository.GetTransactionsByProductIdAsync(
+            productId,
+            take,
+            fromUtc,
+            toUtc,
+            cancellationToken);
         return rows
             .Select(x => new InventoryTransactionResult(
                 x.Id,

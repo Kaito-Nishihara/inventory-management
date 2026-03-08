@@ -52,6 +52,8 @@ public interface IInventoryService
     Task<IReadOnlyList<InventoryTransactionResult>> GetTransactionsAsync(
         Guid productId,
         int take = 20,
+        DateTime? fromUtc = null,
+        DateTime? toUtc = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

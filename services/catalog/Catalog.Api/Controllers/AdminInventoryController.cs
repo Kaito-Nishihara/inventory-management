@@ -79,9 +79,14 @@ public class AdminInventoryController(IInventoryService inventoryService) : Cont
     /// <returns>在庫履歴です。</returns>
     [HttpGet("{productId:guid}/transactions")]
     [ProducesResponseType(typeof(IReadOnlyList<InventoryTransactionResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> ListTransactions(Guid productId, [FromQuery] int take = 20, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> ListTransactions(
+        Guid productId,
+        [FromQuery] int take = 20,
+        [FromQuery] DateTime? fromUtc = null,
+        [FromQuery] DateTime? toUtc = null,
+        CancellationToken cancellationToken = default)
     {
-        var rows = await _inventoryService.GetTransactionsAsync(productId, take, cancellationToken);
+        var rows = await _inventoryService.GetTransactionsAsync(productId, take, fromUtc, toUtc, cancellationToken);
         return Ok(rows.Select(x => new InventoryTransactionResponse(
             x.Id,
             x.ProductId,
