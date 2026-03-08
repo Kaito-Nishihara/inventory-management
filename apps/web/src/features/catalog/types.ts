@@ -6,6 +6,7 @@ export type ProductResponse = {
   name: string
   description: string
   price: number
+  isPublished?: boolean
   onHand: number
   reserved: number
   available: number

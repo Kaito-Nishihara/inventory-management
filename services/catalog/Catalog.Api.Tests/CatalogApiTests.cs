@@ -68,6 +68,29 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
     }
 
     [Fact]
+    public async Task AdminProductsEndpoint_IncludesUnpublishedProducts()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken("1", "admin"));
+
+        var categoryId = await GetAnyCategoryIdAsync(client);
+        var create = await client.PostAsJsonAsync("/admin/products", new CreateProductRequest(categoryId, "Draft Product", "Unpublished", 1500));
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var created = await create.Content.ReadFromJsonAsync<CreateProductResponse>();
+        Assert.NotNull(created);
+
+        var list = await client.GetFromJsonAsync<AdminProductListResponse>("/admin/products?page=1&pageSize=20");
+        Assert.NotNull(list);
+        var target = list!.Items.SingleOrDefault(x => x.Id == created!.ProductId);
+        Assert.NotNull(target);
+        Assert.False(target!.IsPublished);
+    }
+
+    [Fact]
     public async Task Inventory_IssueOverAvailable_ReturnsConflict()
     {
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -215,6 +238,8 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
     public sealed record InventoryAdjustRequest(Guid ProductId, int NewOnHand, int ExpectedVersion, string? Note);
     public sealed record ProductResponse(Guid Id, Guid CategoryId, string CategoryKey, string CategoryName, string Name, string Description, decimal Price, int OnHand, int Reserved, int Available, int Version);
     public sealed record ProductListResponse(List<ProductResponse> Items, int TotalCount, int Page, int PageSize, int TotalPages);
+    public sealed record AdminProductResponse(Guid Id, Guid CategoryId, string CategoryKey, string CategoryName, string Name, string Description, decimal Price, bool IsPublished, int OnHand, int Reserved, int Available, int Version);
+    public sealed record AdminProductListResponse(List<AdminProductResponse> Items, int TotalCount, int Page, int PageSize, int TotalPages);
     public sealed record CategoryResponse(Guid Id, string Key, string Name, int SortOrder);
     public sealed record StockLocationResponse(Guid Id, string Code, string Name, string Type);
     public sealed record LocationInventoryStockResponse(

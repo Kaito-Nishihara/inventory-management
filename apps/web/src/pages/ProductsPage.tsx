@@ -124,6 +124,7 @@ function ProductsPage({
           </div>
 
           <div className="relative flex items-center gap-3">
+            {isAdmin && <Button onClick={() => navigate("/admin/products")}>商品管理</Button>}
             {isAdmin && <Button onClick={() => navigate("/admin/inventory")}>在庫操作</Button>}
             <Button onClick={() => navigate("/orders")}>注文履歴</Button>
             <Button onClick={() => navigate("/checkout")}>カート ({cartCount})</Button>
