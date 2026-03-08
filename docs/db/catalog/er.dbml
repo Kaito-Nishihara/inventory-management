@@ -1,5 +1,5 @@
 // catalog schema
-// GeneratedAtUtc: 2026-03-08T04:51:51Z
+// GeneratedAtUtc: 2026-03-08T08:55:19Z
 
 Table catalog.categories {
   Id uuid [pk,not null]
