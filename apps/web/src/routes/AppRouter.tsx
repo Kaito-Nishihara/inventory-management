@@ -84,12 +84,13 @@ function AppRouter() {
   }, [])
 
   const refreshAccessToken = useCallback(async (): Promise<string | null> => {
-    if (!refreshToken) return null
+    const effectiveRefreshToken = refreshToken ?? localStorage.getItem("inventory.refresh_token")
+    if (!effectiveRefreshToken) return null
 
     try {
       client.setConfig({ baseUrl: identityBaseUrl })
       const { data, response } = await postAuthRefresh({
-        body: { refreshToken },
+        body: { refreshToken: effectiveRefreshToken },
       })
 
       if (!response?.ok) {
@@ -144,6 +145,23 @@ function AppRouter() {
     },
     [clearAuthSession, mapApiError],
   )
+  const readApiErrorCode = useCallback(async (response: Response): Promise<string | null> => {
+    try {
+      const payload = (await response.clone().json()) as { code?: unknown }
+      if (typeof payload.code === "string" && payload.code.length > 0) {
+        return payload.code
+      }
+    } catch {
+      // Fall through to plain text format.
+    }
+
+    try {
+      const text = (await response.clone().text()).replaceAll('"', "").trim()
+      return text.length > 0 ? text : null
+    } catch {
+      return null
+    }
+  }, [])
   const isAdmin = useMemo(() => getRoleFromJwt(token) === "admin", [token])
 
   const fetchCategories = useCallback(async (): Promise<CategoryResponse[]> => {
@@ -452,7 +470,7 @@ function AppRouter() {
         return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
       }
 
-      const code = (await response.text()).replaceAll('"', "")
+      const code = await readApiErrorCode(response)
       if (response.status === 409 && code === "insufficient_stock") {
         return { ok: false, code, message: "移動元ロケーションの在庫が不足しています。" }
       }
@@ -467,7 +485,7 @@ function AppRouter() {
       }
       return { ok: false, code, message: await mapApiErrorResponse(response) }
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode, token],
   )
 
   const runTransferAction = useCallback(
@@ -493,7 +511,7 @@ function AppRouter() {
         return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
       }
 
-      const code = (await response.text()).replaceAll('"', "")
+      const code = await readApiErrorCode(response)
       if (response.status === 404 && code === "transfer_not_found") {
         return { ok: false, code, message: "移動指示が見つかりません。" }
       }
@@ -506,7 +524,7 @@ function AppRouter() {
 
       return { ok: false, code, message: await mapApiErrorResponse(response) }
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode, token],
   )
 
   const receiveInventory = useCallback(
@@ -536,7 +554,7 @@ function AppRouter() {
         return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
       }
 
-      const code = (await response.text()).replaceAll('"', "")
+      const code = await readApiErrorCode(response)
       if (response.status === 409 && code === "version_conflict") {
         return { ok: false, code, message: "バージョン競合が発生しました。最新データを取得してから再試行してください。" }
       }
@@ -545,7 +563,7 @@ function AppRouter() {
       }
       return { ok: false, code, message: await mapApiErrorResponse(response) }
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode, token],
   )
 
   const issueInventory = useCallback(
@@ -575,7 +593,7 @@ function AppRouter() {
         return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
       }
 
-      const code = (await response.text()).replaceAll('"', "")
+      const code = await readApiErrorCode(response)
       if (response.status === 409 && code === "version_conflict") {
         return { ok: false, code, message: "バージョン競合が発生しました。最新データを取得してから再試行してください。" }
       }
@@ -587,7 +605,7 @@ function AppRouter() {
       }
       return { ok: false, code, message: await mapApiErrorResponse(response) }
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode, token],
   )
 
   const adjustInventory = useCallback(
@@ -614,14 +632,14 @@ function AppRouter() {
         return { ok: true, message: "棚卸調整を実行しました。" }
       }
       if (response.status === 400) {
-        const code = (await response.text()).replaceAll('"', "")
+        const code = await readApiErrorCode(response)
         if (code === "invalid_on_hand") {
           return { ok: false, code, message: "在庫数が不正です。引当中の在庫を下回ることはできません。" }
         }
         return { ok: false, code: "validation_error", message: await mapApiErrorResponse(response) }
       }
 
-      const code = (await response.text()).replaceAll('"', "")
+      const code = await readApiErrorCode(response)
       if (response.status === 409 && code === "version_conflict") {
         return { ok: false, code, message: "バージョン競合が発生しました。最新データを取得してから再試行してください。" }
       }
@@ -630,7 +648,7 @@ function AppRouter() {
       }
       return { ok: false, code, message: await mapApiErrorResponse(response) }
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode, token],
   )
 
   const fetchTransactions = useCallback(

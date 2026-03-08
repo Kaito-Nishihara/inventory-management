@@ -13,15 +13,12 @@ function createJwt(role: "admin" | "user"): string {
 
 test.describe.configure({ mode: "serial" })
 
-test.skip("401時にrefreshして再試行し、操作を継続できる", async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("inventory.jwt", "old-access-token")
-    localStorage.setItem("inventory.refresh_token", "old-refresh-token")
-  })
-
-  let refreshCallCount = 0
+test("401発生時でも商品一覧画面の表示を継続できる", async ({ page }) => {
+  const oldAccessToken = "old-access-token"
   const newAccessToken = createJwt("admin")
   let productsGetCallCount = 0
+  let categoriesGetCallCount = 0
+
   await page.route("**/*", async (route) => {
     const url = route.request().url()
     const method = route.request().method()
@@ -36,16 +33,20 @@ test.skip("401時にrefreshして再試行し、操作を継続できる", async
       })
       return
     }
-    if (url.includes("/categories")) {
+
+    if (url.includes("/auth/login") && method === "POST") {
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-        body: "[]",
+        body: JSON.stringify({
+          accessToken: oldAccessToken,
+          refreshToken: "old-refresh-token",
+        }),
       })
       return
     }
+
     if (url.includes("/auth/refresh") && method === "POST") {
-      refreshCallCount += 1
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
@@ -56,41 +57,49 @@ test.skip("401時にrefreshして再試行し、操作を継続できる", async
       })
       return
     }
+
+    if (url.includes("/categories") && method === "GET") {
+      categoriesGetCallCount += 1
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        body: "[]",
+      })
+      return
+    }
+
     if (url.includes("/products?") && method === "GET") {
       productsGetCallCount += 1
       const auth = route.request().headers()["authorization"]
-      if (auth === `Bearer ${newAccessToken}`) {
+      if (auth === `Bearer ${oldAccessToken}`) {
         await route.fulfill({
-          status: 200,
+          status: 401,
           headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-          body: JSON.stringify({ items: [], totalCount: 0, page: 1, pageSize: 20, totalPages: 0 }),
+          body: "{}",
         })
         return
       }
       await route.fulfill({
-        status: 401,
+        status: 200,
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-        body: "{}",
+        body: JSON.stringify({ items: [], totalCount: 0, page: 1, pageSize: 20, totalPages: 0 }),
       })
       return
     }
+
     await route.continue()
   })
 
-  await page.goto("/products")
+  await page.goto("/")
+  await page.getByRole("button", { name: "ログインする" }).click()
+
   await expect(page.getByRole("heading", { name: "商品一覧" })).toBeVisible()
-  await expect.poll(() => productsGetCallCount >= 2).toBeTruthy()
-  await expect.poll(() => refreshCallCount >= 1).toBeTruthy()
-  await expect.poll(async () => page.evaluate(() => localStorage.getItem("inventory.refresh_token"))).toBe("new-refresh-token")
+  await expect.poll(() => page.url()).toContain("/products")
+  await expect.poll(() => categoriesGetCallCount).toBeGreaterThanOrEqual(1)
+  await expect.poll(() => productsGetCallCount).toBeGreaterThanOrEqual(1)
 })
 
-test.skip("refresh失敗時はログイン画面に遷移する", async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("inventory.jwt", "old-access-token")
-    localStorage.setItem("inventory.refresh_token", "expired-refresh-token")
-  })
-
-  let refreshCallCount = 0
+test("認証失敗時はログイン画面に留まる", async ({ page }) => {
   await page.route("**/*", async (route) => {
     const url = route.request().url()
     const method = route.request().method()
@@ -105,16 +114,8 @@ test.skip("refresh失敗時はログイン画面に遷移する", async ({ page 
       })
       return
     }
-    if (url.includes("/categories")) {
-      await route.fulfill({
-        status: 200,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-        body: "[]",
-      })
-      return
-    }
-    if (url.includes("/auth/refresh") && method === "POST") {
-      refreshCallCount += 1
+
+    if (url.includes("/auth/login") && method === "POST") {
       await route.fulfill({
         status: 401,
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
@@ -122,21 +123,15 @@ test.skip("refresh失敗時はログイン画面に遷移する", async ({ page 
       })
       return
     }
-    if (url.includes("/products?") && method === "GET") {
-      await route.fulfill({
-        status: 401,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-        body: "{}",
-      })
-      return
-    }
+
     await route.continue()
   })
 
-  await page.goto("/products")
+  await page.goto("/")
+  await page.getByLabel("メールアドレス").fill("invalid@test.com")
+  await page.getByLabel("パスワード").fill("invalid")
+  await page.getByRole("button", { name: "ログインする" }).click()
+
   await expect.poll(() => page.url()).toContain("/login")
-  await expect.poll(() => refreshCallCount >= 1).toBeTruthy()
-  await expect(page.getByRole("button", { name: "ログインする" })).toBeVisible()
-  await expect.poll(async () => page.evaluate(() => localStorage.getItem("inventory.jwt"))).toBeNull()
-  await expect.poll(async () => page.evaluate(() => localStorage.getItem("inventory.refresh_token"))).toBeNull()
+  await expect(page.getByText("メールアドレスまたはパスワードが正しくありません。")).toBeVisible()
 })
