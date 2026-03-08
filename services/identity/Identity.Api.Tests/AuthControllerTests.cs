@@ -2,8 +2,13 @@ using Identity.Api.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
 using Xunit;
 
 namespace Identity.Api.Tests;
@@ -87,11 +92,55 @@ public class AuthControllerTests(IdentityApiFactory factory) : IClassFixture<Ide
         Assert.Equal(HttpStatusCode.Unauthorized, refreshAfterRevoke.StatusCode);
     }
 
+    [Fact]
+    public async Task AdminAuthAuditLogs_AdminCanList_AndUserIsForbidden()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        var failLogin = await client.PostAsJsonAsync("/auth/login", new LoginRequest("notfound@test.com", "invalid"));
+        Assert.Equal(HttpStatusCode.Unauthorized, failLogin.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken("1", "admin"));
+        var adminResponse = await client.GetAsync("/admin/auth-audit-logs?take=10");
+        Assert.Equal(HttpStatusCode.OK, adminResponse.StatusCode);
+
+        var rows = await adminResponse.Content.ReadFromJsonAsync<List<AuthAuditLogResponse>>();
+        Assert.NotNull(rows);
+        Assert.NotEmpty(rows!);
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken("2", "user"));
+        var userResponse = await client.GetAsync("/admin/auth-audit-logs?take=10");
+        Assert.Equal(HttpStatusCode.Forbidden, userResponse.StatusCode);
+    }
+
+    private static string GenerateToken(string userId, string role)
+    {
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId),
+            new Claim(ClaimTypes.Role, role)
+        };
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JwtSettings.SecretKey));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(1),
+            signingCredentials: creds);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
     public sealed record RegisterRequest(string Email, string Password);
     public sealed record LoginRequest(string Email, string Password);
     public sealed record RefreshRequest(string RefreshToken);
     public sealed record RevokeRequest(string RefreshToken);
     public sealed record AuthTokensResponse(string AccessToken, string RefreshToken);
+    public sealed record AuthAuditLogResponse(Guid Id, Guid? UserId, string Action, bool Success, string? Detail, DateTime CreatedAtUtc);
 }
 
 public class IdentityApiFactory : WebApplicationFactory<Program>

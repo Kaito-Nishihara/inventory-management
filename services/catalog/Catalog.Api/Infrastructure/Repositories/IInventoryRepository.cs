@@ -28,6 +28,8 @@ public interface IInventoryRepository
     Task<IReadOnlyList<InventoryTransaction>> GetTransactionsByProductIdAsync(
         Guid productId,
         int take = 20,
+        DateTime? fromUtc = null,
+        DateTime? toUtc = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

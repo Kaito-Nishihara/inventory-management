@@ -138,6 +138,41 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
     }
 
     [Fact]
+    public async Task Inventory_Transactions_CanBeFilteredByPeriod()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken("1", "admin"));
+
+        var categoryId = await GetAnyCategoryIdAsync(client);
+        var create = await client.PostAsJsonAsync("/admin/products", new CreateProductRequest(categoryId, "Tablet", "11-inch", 80000));
+        var created = await create.Content.ReadFromJsonAsync<CreateProductResponse>();
+        Assert.NotNull(created);
+
+        var receive = await client.PostAsJsonAsync("/admin/inventory/receive", new InventoryQuantityRequest(created!.ProductId, 10, 0, "receive"));
+        Assert.Equal(HttpStatusCode.NoContent, receive.StatusCode);
+
+        var issue = await client.PostAsJsonAsync("/admin/inventory/issue", new InventoryQuantityRequest(created.ProductId, 2, 1, "issue"));
+        Assert.Equal(HttpStatusCode.NoContent, issue.StatusCode);
+
+        await Task.Delay(1200);
+        var fromUtc = DateTime.UtcNow;
+
+        var adjust = await client.PostAsJsonAsync("/admin/inventory/adjust", new InventoryAdjustRequest(created.ProductId, 12, 2, "adjust"));
+        Assert.Equal(HttpStatusCode.NoContent, adjust.StatusCode);
+
+        var rows = await client.GetFromJsonAsync<List<InventoryTransactionResponse>>(
+            $"/admin/inventory/{created.ProductId}/transactions?take=20&fromUtc={Uri.EscapeDataString(fromUtc.ToString("O"))}");
+
+        Assert.NotNull(rows);
+        Assert.Single(rows!);
+        Assert.Equal("adjust", rows[0].Type);
+    }
+
+    [Fact]
     public async Task LocationInventory_TransferWorkflow_UpdatesStocksOnShipAndReceive()
     {
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -253,6 +288,15 @@ public class CatalogApiTests(CatalogApiFactory factory) : IClassFixture<CatalogA
         int InTransitIn);
     public sealed record LocationTransferRequest(Guid ProductId, Guid FromLocationId, Guid ToLocationId, int Quantity, string? Note);
     public sealed record LocationTransferCreatedResponse(Guid TransferId);
+    public sealed record InventoryTransactionResponse(
+        Guid Id,
+        Guid ProductId,
+        string Type,
+        int QuantityDelta,
+        int OnHandAfter,
+        int ReservedAfter,
+        string? Note,
+        DateTime CreatedAtUtc);
 }
 
 public class CatalogApiFactory : WebApplicationFactory<Program>

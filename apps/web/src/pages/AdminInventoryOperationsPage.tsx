@@ -224,6 +224,7 @@ function AdminInventoryOperationsPage({
             <Button onClick={() => navigate("/products")}>商品一覧</Button>
             <Button onClick={() => navigate("/admin/products")}>商品管理</Button>
             <Button onClick={() => navigate("/admin/inventory")}>ロケーション管理</Button>
+            <Button onClick={() => navigate("/admin/inventory/audit")}>在庫監査</Button>
             <Button onClick={() => navigate("/orders")}>注文履歴</Button>
             <Button onClick={onLogout} variant="ghost">
               ログアウト
