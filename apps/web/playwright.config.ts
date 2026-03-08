@@ -5,13 +5,13 @@ export default defineConfig({
   timeout: 30_000,
   fullyParallel: true,
   webServer: {
-    command: "npm run dev -- --host 127.0.0.1 --port 3000",
-    url: "http://127.0.0.1:3000",
+    command: "npm run dev -- --host 127.0.0.1 --port 3100",
+    url: "http://127.0.0.1:3100",
     reuseExistingServer: true,
     timeout: 120_000,
   },
   use: {
-    baseURL: process.env.FRONTEND_BASE_URL ?? "http://127.0.0.1:3000",
+    baseURL: process.env.FRONTEND_BASE_URL ?? "http://127.0.0.1:3100",
     trace: "on-first-retry",
   },
   projects: [

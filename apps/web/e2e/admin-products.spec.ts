@@ -1,14 +1,24 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 
 function createJwt(role: "admin" | "user"): string {
   const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }))
   const payload = btoa(
     JSON.stringify({
+      role,
       "http://schemas.microsoft.com/ws/2008/06/identity/claims/role": role,
       sub: "2",
     }),
   )
   return `${header}.${payload}.signature`
+}
+
+async function seedToken(page: Page, role: "admin" | "user") {
+  await page.goto("/login")
+  const token = createJwt(role)
+  await page.evaluate((value) => {
+    localStorage.setItem("inventory.jwt", value)
+  }, token)
+  await page.reload()
 }
 
 const categoryId = "cat-1"
@@ -31,10 +41,7 @@ function publishedProduct(id: string, name: string, price: number) {
 }
 
 test("user ロールでは商品管理ページにアクセスできない", async ({ page }) => {
-  await page.addInitScript((token) => {
-    localStorage.setItem("inventory.jwt", token)
-    localStorage.setItem("inventory.refresh_token", "refresh-token")
-  }, createJwt("user"))
+  await seedToken(page, "user")
 
   await page.route("**://localhost:5002/categories", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
@@ -52,15 +59,12 @@ test("user ロールでは商品管理ページにアクセスできない", asy
   await expect(page.getByRole("heading", { name: "商品管理（作成/更新/公開切替）" })).not.toBeVisible()
 })
 
-test.skip("admin が商品を作成・更新・公開切替できる", async ({ page }) => {
-  await page.addInitScript((token) => {
-    localStorage.setItem("inventory.jwt", token)
-    localStorage.setItem("inventory.refresh_token", "refresh-token")
-  }, createJwt("admin"))
+test("admin が商品を作成・更新・公開切替できる", async ({ page }) => {
+  await seedToken(page, "admin")
 
   const publishedItems = [publishedProduct(existingProductId, "既存キーボード", 12000)]
   const createdProductId = "c6212498-a301-4ec2-b812-cb7dc0fefaa0"
-  let createdPublished = false
+  let createdExists = false
 
   await page.route("**://localhost:5002/categories", async (route) => {
     await route.fulfill({
@@ -71,7 +75,8 @@ test.skip("admin が商品を作成・更新・公開切替できる", async ({ 
   })
 
   await page.route("**://localhost:5002/admin/products?*", async (route) => {
-    const items = createdPublished ? [...publishedItems, publishedProduct(createdProductId, "新規マウス", 6800)] : publishedItems
+    const createdItem = publishedProduct(createdProductId, "新規マウス", 6800)
+    const items = createdExists ? [...publishedItems, createdItem] : publishedItems
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -86,6 +91,7 @@ test.skip("admin が商品を作成・更新・公開切替できる", async ({ 
   })
 
   await page.route("**://localhost:5002/admin/products", async (route) => {
+    createdExists = true
     await route.fulfill({
       status: 201,
       contentType: "application/json",
@@ -98,7 +104,6 @@ test.skip("admin が商品を作成・更新・公開切替できる", async ({ 
   })
 
   await page.route(`**://localhost:5002/admin/products/${createdProductId}/publish`, async (route) => {
-    createdPublished = true
     await route.fulfill({ status: 204, body: "" })
   })
   await page.route("**://localhost:5001/auth/refresh", async (route) => {
@@ -119,6 +124,7 @@ test.skip("admin が商品を作成・更新・公開切替できる", async ({ 
   await expect(page.getByText("商品を作成しました。")).toBeVisible()
   await expect(page.getByRole("button", { name: /新規マウス.*非公開/ })).toBeVisible()
 
+  await page.getByRole("button", { name: /新規マウス.*非公開/ }).click()
   await page.getByLabel("商品名（更新）").fill("新規マウス 改")
   await page.getByRole("button", { name: "商品情報を更新する" }).click()
   await expect(page.getByText("商品情報を更新しました。")).toBeVisible()
@@ -128,10 +134,7 @@ test.skip("admin が商品を作成・更新・公開切替できる", async ({ 
 })
 
 test("admin 商品作成時に403/409エラーを表示できる", async ({ page }) => {
-  await page.addInitScript((token) => {
-    localStorage.setItem("inventory.jwt", token)
-    localStorage.setItem("inventory.refresh_token", "refresh-token")
-  }, createJwt("admin"))
+  await seedToken(page, "admin")
 
   await page.route("**://localhost:5002/categories", async (route) => {
     await route.fulfill({

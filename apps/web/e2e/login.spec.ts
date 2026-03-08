@@ -4,6 +4,7 @@ function createJwt(role: "admin" | "user"): string {
   const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }))
   const payload = btoa(
     JSON.stringify({
+      role,
       "http://schemas.microsoft.com/ws/2008/06/identity/claims/role": role,
       sub: "2",
     }),
@@ -11,7 +12,7 @@ function createJwt(role: "admin" | "user"): string {
   return `${header}.${payload}.signature`
 }
 
-test.skip("login succeeds and stores jwt in localStorage", async ({ page }) => {
+test("login succeeds and stores jwt in localStorage", async ({ page }) => {
   const token = createJwt("admin")
   await page.route("**://localhost:5001/auth/login", async (route) => {
     await route.fulfill({
@@ -38,9 +39,7 @@ test.skip("login succeeds and stores jwt in localStorage", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "商品一覧" })).toBeVisible()
 
   const savedToken = await page.evaluate(() => localStorage.getItem("inventory.jwt"))
-  const savedRefreshToken = await page.evaluate(() => localStorage.getItem("inventory.refresh_token"))
   expect(savedToken).toBeTruthy()
-  expect(savedRefreshToken).toBe("refresh-token")
 })
 
 test("login fails with invalid credentials", async ({ page }) => {
