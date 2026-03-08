@@ -81,6 +81,27 @@ public class OrderApiTests(OrderApiFactory factory) : IClassFixture<OrderApiFact
         Assert.Equal(HttpStatusCode.Conflict, cancel.StatusCode);
     }
 
+    [Fact]
+    public async Task ChangeStatus_WithUserRole_ReturnsForbidden()
+    {
+        factory.Gateway.SetReserveResult(new ReserveResult(true, string.Empty));
+
+        Guid orderId;
+        using (var userClient = CreateUserClient())
+        {
+            var create = await userClient.PostAsJsonAsync("/orders", new CreateOrderRequest(Guid.NewGuid(), 1));
+            var payload = await create.Content.ReadFromJsonAsync<CreateOrderResponse>();
+            Assert.NotNull(payload);
+            orderId = payload!.OrderId;
+        }
+
+        using var userClientForAdminEndpoint = CreateUserClient();
+        var response = await userClientForAdminEndpoint.PostAsJsonAsync(
+            $"/admin/orders/{orderId}/status",
+            new ChangeOrderStatusRequest("shipped"));
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     private HttpClient CreateUserClient()
     {
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions

@@ -4,12 +4,14 @@ using System.Security.Claims;
 using System.ComponentModel.DataAnnotations;
 using Order.Api.Application.Orders;
 using Backend.Validation;
+using Backend.Validation.Authorization;
+using Order.Api.Security;
 
 namespace Order.Api.Controllers;
 
 [ApiController]
 [Route("orders")]
-[Authorize]
+[Authorize(Policy = OrderPolicies.OrdersRead)]
 /// <summary>
 /// 注文APIを提供します。
 /// </summary>
@@ -49,7 +51,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     [ProducesResponseType(typeof(IReadOnlyList<OrderResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {
-        var isAdmin = User.IsInRole("admin");
+        var isAdmin = User.IsInRole(AppRoles.Admin);
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var orders = await _orderService.GetListAsync(userId, isAdmin, cancellationToken);
         return Ok(orders.Select(Map).ToList());
@@ -66,7 +68,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid orderId, CancellationToken cancellationToken)
     {
-        var isAdmin = User.IsInRole("admin");
+        var isAdmin = User.IsInRole(AppRoles.Admin);
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var order = await _orderService.GetByIdAsync(orderId, userId, isAdmin, cancellationToken);
         if (order is null)
@@ -91,7 +93,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
 
 [ApiController]
 [Route("admin/orders")]
-[Authorize(Roles = "admin")]
+[Authorize(Policy = OrderPolicies.OrdersManage)]
 /// <summary>
 /// 管理者向け注文APIを提供します。
 /// </summary>

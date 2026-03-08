@@ -1,4 +1,5 @@
 using Identity.Api.Infrastructure.Repositories;
+using Identity.Api.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,7 +7,7 @@ namespace Identity.Api.Controllers;
 
 [ApiController]
 [Route("admin/auth-audit-logs")]
-[Authorize(Roles = "admin")]
+[Authorize(Policy = IdentityPolicies.AuthAuditRead)]
 public class AdminAuthAuditLogsController(IAuthAuditLogRepository authAuditLogRepository) : ControllerBase
 {
     private readonly IAuthAuditLogRepository _authAuditLogRepository = authAuditLogRepository;
