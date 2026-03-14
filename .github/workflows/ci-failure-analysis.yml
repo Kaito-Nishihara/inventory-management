@@ -31,20 +31,6 @@ jobs:
         run: |
           RUN_ID=${{ github.event.workflow_run.id }}
 
-          # 失敗したジョブのログを取得
-          gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}/jobs" \
-            --jq '.jobs[] | select(.conclusion == "failure") | {name, conclusion, steps: [.steps[] | select(.conclusion == "failure") | {name, conclusion}]}' \
-            > /tmp/failed-jobs.json
-
-          # ログをダウンロード
-          gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}/logs" > /tmp/logs.zip || true
-          if [ -f /tmp/logs.zip ]; then
-            mkdir -p /tmp/ci-logs
-            unzip -o /tmp/logs.zip -d /tmp/ci-logs 2>/dev/null || true
-            # 各ログファイルの末尾（エラー付近）を結合
-            find /tmp/ci-logs -name "*.txt" -exec tail -100 {} \; > /tmp/error-logs.txt
-          fi
-
           # PR 番号を取得
           PR_NUMBER=$(gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}" \
             --jq '.pull_requests[0].number // empty')
@@ -55,11 +41,39 @@ jobs:
             exit 0
           fi
 
+          # 失敗したジョブ情報を取得
+          gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}/jobs" \
+            --jq '.jobs[] | select(.conclusion == "failure") | {name, conclusion, steps: [.steps[] | select(.conclusion == "failure") | {name, conclusion}]}' \
+            > /tmp/failed-jobs.json
+
+          # ログをダウンロード
+          gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}/logs" > /tmp/logs.zip || true
+          if [ -f /tmp/logs.zip ]; then
+            mkdir -p /tmp/ci-logs
+            unzip -o /tmp/logs.zip -d /tmp/ci-logs 2>/dev/null || true
+            # 失敗ジョブのログだけ末尾を取得（全体だと大きすぎる）
+            find /tmp/ci-logs -name "*.txt" -exec tail -80 {} \; > /tmp/error-logs.txt
+            # 5000行で切る
+            head -5000 /tmp/error-logs.txt > /tmp/error-logs-trimmed.txt
+            mv /tmp/error-logs-trimmed.txt /tmp/error-logs.txt
+          fi
+
           echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
-      - name: Claude で失敗を分析
+          # ログ内容をファイルに保存（Claude のプロンプトに埋め込み用）
+          echo "=== 失敗ジョブ ===" > /tmp/ci-failure-context.txt
+          cat /tmp/failed-jobs.json >> /tmp/ci-failure-context.txt
+          echo "" >> /tmp/ci-failure-context.txt
+          echo "=== エラーログ（末尾抜粋） ===" >> /tmp/ci-failure-context.txt
+          if [ -f /tmp/error-logs.txt ]; then
+            cat /tmp/error-logs.txt >> /tmp/ci-failure-context.txt
+          else
+            echo "(ログ取得失敗)" >> /tmp/ci-failure-context.txt
+          fi
+
+      - name: Claude で失敗を分析してコメント投稿
         if: steps.get-logs.outputs.skip != 'true'
         uses: anthropics/claude-code-action@v1
         with:
@@ -68,25 +82,22 @@ jobs:
           prompt: |
             ## CI 失敗分析タスク
 
-            CI が失敗しました。以下の手順で分析してください。
+            PR #${{ steps.get-logs.outputs.pr_number }} の CI が失敗しました。
+            CI Run: https://github.com/${{ github.repository }}/actions/runs/${{ steps.get-logs.outputs.run_id }}
 
-            ### 1. 失敗情報を収集
-            - Run ID: ${{ steps.get-logs.outputs.run_id }}
-            - `/tmp/failed-jobs.json` に失敗したジョブ情報があります
-            - `/tmp/error-logs.txt` にエラーログがあります（存在する場合）
-            - `gh` コマンドでさらに詳細を取得できます
+            `/tmp/ci-failure-context.txt` にログがあります。読んで分析してください。
 
-            ### 2. PR にコメントを投稿
-            以下のフォーマットで PR #${{ steps.get-logs.outputs.pr_number }} にコメントしてください:
+            分析結果を以下のマークダウンフォーマットで **標準出力に出力** してください（コメント投稿はシステムが行います）:
 
-            ```
             ## 🔍 CI 失敗分析
 
+            **CI Run**: [#${{ steps.get-logs.outputs.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ steps.get-logs.outputs.run_id }})
+
             ### 失敗したジョブ
-            - ジョブ名とステップ名
+            - ジョブ名 > ステップ名
 
             ### 失敗分類
-            lint / unit-test / build / e2e / infrastructure のいずれか
+            `lint` / `unit-test` / `build` / `e2e` / `infrastructure` のいずれか
 
             ### エラー概要
             スタックトレースやエラーメッセージの要約（5行以内）
@@ -96,40 +107,16 @@ jobs:
             2. 次に可能性の高い原因
 
             ### 影響範囲
-            このエラーが影響するファイルや機能の範囲
+            このエラーが影響するファイルや機能
 
             ### 推奨アクション
             修正の方向性（具体的なコード修正は行わない）
-            ```
 
-            ### 3. Issue 化の判定
-            以下の **すべて** を満たす場合のみ、新しい Issue を作成してください:
+            ### Issue 化判定
+            以下の **すべて** を満たす場合は `gh issue create` で Issue を作成してください:
             - 同種の既存 Open Issue がない（`gh issue list` で確認）
-            - flaky テスト（タイミング依存・環境依存）ではない
-            - コード起因の可能性が高い（外部サービス障害等ではない）
+            - flaky テスト（タイミング依存）ではない
+            - コード起因の可能性が高い
             - lint エラーや typo など自明な修正ではない
 
-            Issue を作成する場合のフォーマット:
-            ```
-            タイトル: [CI失敗] 簡潔な説明
-            ラベル: bug
-            本文:
-              ## 発生状況
-              - PR: #番号
-              - CI Run: URL
-              - 失敗ジョブ: ジョブ名
-
-              ## エラー内容
-              要約
-
-              ## 再現条件
-              わかる範囲で
-
-              ## 推奨対応
-              方向性
-            ```
-
-            Issue 化 **しない** 場合は、PR コメントの末尾に以下を追記:
-            ```
-            > ℹ️ この失敗は Issue 化の条件を満たしませんでした（理由: ○○）
-            ```
+            条件を満たさない場合は理由を記載してください。
