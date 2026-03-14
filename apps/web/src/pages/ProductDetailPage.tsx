@@ -4,13 +4,12 @@ import Button from "../components/ui/Button"
 import type { ProductResponse } from "../features/catalog/types"
 
 type ProductDetailPageProps = {
-  token: string
   onLogout: () => void
   onAddToCart: (product: ProductResponse) => void
-  fetchProductById: (productId: string, token: string) => Promise<ProductResponse>
+  fetchProductById: (productId: string) => Promise<ProductResponse>
 }
 
-function ProductDetailPage({ token, onLogout, onAddToCart, fetchProductById }: ProductDetailPageProps) {
+function ProductDetailPage({ onLogout, onAddToCart, fetchProductById }: ProductDetailPageProps) {
   const { productId } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -32,7 +31,7 @@ function ProductDetailPage({ token, onLogout, onAddToCart, fetchProductById }: P
       setError(null)
 
       try {
-        const data = await fetchProductById(productId, token)
+        const data = await fetchProductById(productId)
         setProduct(data)
         setStatus("success")
       } catch (err) {
@@ -42,7 +41,7 @@ function ProductDetailPage({ token, onLogout, onAddToCart, fetchProductById }: P
     }
 
     void run()
-  }, [fetchProductById, isProductIdMissing, productId, token])
+  }, [fetchProductById, isProductIdMissing, productId])
 
   const goProducts = () => {
     navigate(`/products${query ? `?${query}` : ""}`)
