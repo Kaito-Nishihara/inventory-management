@@ -20,8 +20,7 @@ describe("fetchWithAutoRefresh", () => {
       onAuthExpired: vi.fn(),
     })
 
-    // 意図的なテスト失敗: CI 失敗分析ワークフローの動作確認用
-    expect(response.status).toBe(999)
+    expect(response.status).toBe(200)
     expect(fetchFn).toHaveBeenCalledTimes(2)
     expect(fetchFn.mock.calls[1]?.[1]?.headers).toBeInstanceOf(Headers)
     expect((fetchFn.mock.calls[1]?.[1]?.headers as Headers).get("Authorization")).toBe("Bearer new-token")
