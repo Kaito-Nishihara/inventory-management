@@ -93,3 +93,5 @@ jobs:
   db-docs:
     name: db-docs (generate)
     uses: ./.github/workflows/db-docs.yml
+    permissions:
+      contents: write
