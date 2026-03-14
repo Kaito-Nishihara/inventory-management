@@ -35,3 +35,6 @@ coverage/
 *.user
 *.swp
 *.swo
+
+# Claude Code
+CLAUDE.md
