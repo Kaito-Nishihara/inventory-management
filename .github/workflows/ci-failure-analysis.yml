@@ -24,8 +24,8 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: CI 失敗ログを取得
-        id: get-logs
+      - name: CI 失敗ログを収集
+        id: collect
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -41,57 +41,51 @@ jobs:
             exit 0
           fi
 
-          # 失敗したジョブ情報を取得
-          gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}/jobs" \
-            --jq '.jobs[] | select(.conclusion == "failure") | {name, conclusion, steps: [.steps[] | select(.conclusion == "failure") | {name, conclusion}]}' \
-            > /tmp/failed-jobs.json
+          # 失敗したジョブとステップを取得
+          FAILED_JOBS=$(gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}/jobs" \
+            --jq '[.jobs[] | select(.conclusion == "failure") | {name, steps: [.steps[] | select(.conclusion == "failure") | .name]}]')
 
           # ログをダウンロード
-          gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}/logs" > /tmp/logs.zip || true
-          if [ -f /tmp/logs.zip ]; then
+          ERROR_LOG="(ログ取得失敗)"
+          gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}/logs" > /tmp/logs.zip 2>/dev/null || true
+          if [ -f /tmp/logs.zip ] && [ -s /tmp/logs.zip ]; then
             mkdir -p /tmp/ci-logs
             unzip -o /tmp/logs.zip -d /tmp/ci-logs 2>/dev/null || true
-            # 失敗ジョブのログだけ末尾を取得（全体だと大きすぎる）
-            find /tmp/ci-logs -name "*.txt" -exec tail -80 {} \; > /tmp/error-logs.txt
-            # 5000行で切る
-            head -5000 /tmp/error-logs.txt > /tmp/error-logs-trimmed.txt
-            mv /tmp/error-logs-trimmed.txt /tmp/error-logs.txt
+            ERROR_LOG=$(find /tmp/ci-logs -name "*.txt" -exec grep -l -i "error\|fail\|assert" {} \; | head -5 | xargs -I{} tail -50 {} 2>/dev/null | head -200)
           fi
+
+          # Claude 用のコンテキストファイルを作成
+          cat > /tmp/ci-context.txt << CTXEOF
+          CI Run ID: ${RUN_ID}
+          PR: #${PR_NUMBER}
+          URL: https://github.com/${{ github.repository }}/actions/runs/${RUN_ID}
+
+          === 失敗ジョブ ===
+          ${FAILED_JOBS}
+
+          === エラーログ（抜粋） ===
+          ${ERROR_LOG}
+          CTXEOF
 
           echo "pr_number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
-          # ログ内容をファイルに保存（Claude のプロンプトに埋め込み用）
-          echo "=== 失敗ジョブ ===" > /tmp/ci-failure-context.txt
-          cat /tmp/failed-jobs.json >> /tmp/ci-failure-context.txt
-          echo "" >> /tmp/ci-failure-context.txt
-          echo "=== エラーログ（末尾抜粋） ===" >> /tmp/ci-failure-context.txt
-          if [ -f /tmp/error-logs.txt ]; then
-            cat /tmp/error-logs.txt >> /tmp/ci-failure-context.txt
-          else
-            echo "(ログ取得失敗)" >> /tmp/ci-failure-context.txt
-          fi
-
-      - name: Claude で失敗を分析してコメント投稿
-        if: steps.get-logs.outputs.skip != 'true'
+      - name: Claude で分析
+        if: steps.collect.outputs.skip != 'true'
+        id: analyze
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          use_sticky_comment: "true"
           prompt: |
-            ## CI 失敗分析タスク
+            `/tmp/ci-context.txt` を読んで CI 失敗を分析してください。
 
-            PR #${{ steps.get-logs.outputs.pr_number }} の CI が失敗しました。
-            CI Run: https://github.com/${{ github.repository }}/actions/runs/${{ steps.get-logs.outputs.run_id }}
-
-            `/tmp/ci-failure-context.txt` にログがあります。読んで分析してください。
-
-            分析結果を以下のマークダウンフォーマットで **標準出力に出力** してください（コメント投稿はシステムが行います）:
+            以下のフォーマットで分析結果を出力してください。
+            コメント投稿や Issue 作成は不要です。分析だけ行ってください。
 
             ## 🔍 CI 失敗分析
 
-            **CI Run**: [#${{ steps.get-logs.outputs.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ steps.get-logs.outputs.run_id }})
+            **CI Run**: [Run #${{ steps.collect.outputs.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ steps.collect.outputs.run_id }})
 
             ### 失敗したジョブ
             - ジョブ名 > ステップ名
@@ -100,7 +94,7 @@ jobs:
             `lint` / `unit-test` / `build` / `e2e` / `infrastructure` のいずれか
 
             ### エラー概要
-            スタックトレースやエラーメッセージの要約（5行以内）
+            エラーメッセージの要約（5行以内）
 
             ### 原因候補
             1. 最も可能性の高い原因
@@ -110,13 +104,51 @@ jobs:
             このエラーが影響するファイルや機能
 
             ### 推奨アクション
-            修正の方向性（具体的なコード修正は行わない）
+            修正の方向性
 
-            ### Issue 化判定
-            以下の **すべて** を満たす場合は `gh issue create` で Issue を作成してください:
-            - 同種の既存 Open Issue がない（`gh issue list` で確認）
-            - flaky テスト（タイミング依存）ではない
-            - コード起因の可能性が高い
-            - lint エラーや typo など自明な修正ではない
+      - name: PR にコメントを投稿
+        if: steps.collect.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER=${{ steps.collect.outputs.pr_number }}
+          RUN_ID=${{ steps.collect.outputs.run_id }}
 
-            条件を満たさない場合は理由を記載してください。
+          # Claude の実行結果ファイルから分析内容を取得
+          ANALYSIS=""
+          if [ -f /home/runner/work/_temp/claude-execution-output.json ]; then
+            ANALYSIS=$(cat /home/runner/work/_temp/claude-execution-output.json | \
+              python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          # result メッセージからテキストを抽出
+          for msg in reversed(data) if isinstance(data, list) else [data]:
+              if isinstance(msg, dict):
+                  if msg.get('type') == 'result':
+                      result = msg.get('result', '')
+                      if result:
+                          print(result)
+                          break
+                  elif msg.get('type') == 'assistant':
+                      for content in msg.get('message', {}).get('content', []):
+                          if isinstance(content, dict) and content.get('type') == 'text':
+                              print(content['text'])
+                              break
+          " 2>/dev/null)
+          fi
+
+          if [ -z "$ANALYSIS" ]; then
+            ANALYSIS="CI 失敗を検出しましたが、自動分析に失敗しました。\n\n[CI Run #${RUN_ID}](https://github.com/${{ github.repository }}/actions/runs/${RUN_ID}) を確認してください。"
+          fi
+
+          # 既存の分析コメントを探して更新、なければ新規作成
+          EXISTING_COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            --jq '.[] | select(.body | startswith("## 🔍 CI 失敗分析")) | .id' | tail -1)
+
+          if [ -n "$EXISTING_COMMENT_ID" ]; then
+            gh api "repos/${{ github.repository }}/issues/comments/${EXISTING_COMMENT_ID}" \
+              -X PATCH \
+              -f body="${ANALYSIS}"
+          else
+            gh pr comment "${PR_NUMBER}" --body "${ANALYSIS}"
+          fi
