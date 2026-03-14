@@ -1,0 +1,71 @@
+# Azure App Service Standard プランをローカルで擬似再現するための
+# Docker Compose オーバーライドファイル
+#
+# 使い方:
+#   docker compose -f compose.yml -f compose.loadtest.yml up -d
+#
+# デフォルトは S1 (1コア / 1.75GB)。
+# 環境変数で切り替え可能:
+#   APP_CPUS=2 APP_MEMORY=3.5g docker compose -f compose.yml -f compose.loadtest.yml up -d
+#
+# Azure App Service Standard プラン仕様 (参考):
+#   S1: 1 コア / 1.75 GB
+#   S2: 2 コア / 3.5 GB
+#   S3: 4 コア / 7 GB
+
+services:
+  # --- API サービス (App Service 相当) ---
+  identity-api:
+    deploy:
+      resources:
+        limits:
+          cpus: "${APP_CPUS:-1}"
+          memory: "${APP_MEMORY:-1.75g}"
+        reservations:
+          cpus: "${APP_CPUS:-1}"
+          memory: "${APP_MEMORY:-1.75g}"
+
+  catalog-api:
+    deploy:
+      resources:
+        limits:
+          cpus: "${APP_CPUS:-1}"
+          memory: "${APP_MEMORY:-1.75g}"
+        reservations:
+          cpus: "${APP_CPUS:-1}"
+          memory: "${APP_MEMORY:-1.75g}"
+
+  order-api:
+    deploy:
+      resources:
+        limits:
+          cpus: "${APP_CPUS:-1}"
+          memory: "${APP_MEMORY:-1.75g}"
+        reservations:
+          cpus: "${APP_CPUS:-1}"
+          memory: "${APP_MEMORY:-1.75g}"
+
+  # --- PostgreSQL データベース ---
+  postgres:
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: "2g"
+
+  # --- k6 負荷テスト ---
+  k6:
+    image: grafana/k6:latest
+    container_name: inv-k6
+    profiles:
+      - loadtest
+    volumes:
+      - ./loadtest:/scripts
+    environment:
+      IDENTITY_BASE_URL: "http://identity-api:8080"
+      CATALOG_BASE_URL: "http://catalog-api:8080"
+      ORDER_BASE_URL: "http://order-api:8080"
+    depends_on:
+      - identity-api
+      - catalog-api
+      - order-api
