@@ -55,7 +55,7 @@ jobs:
             --jq '[.[] | select(.body | startswith("## 🔍 CI 失敗分析")) | .body] | last // ""')
 
           # /ai-fix コメントから追加指示を抽出
-          USER_INSTRUCTION=$(echo "$FULL_COMMENT" | sed 's|/ai-fix||' | xargs)
+          USER_INSTRUCTION=$(echo "$FULL_COMMENT" | sed 's|/ai-fix||' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
           {
             echo "review<<GHEOF"
@@ -149,7 +149,7 @@ jobs:
           if [ -f "$OUTPUT_FILE" ]; then
             REPORT=$(python3 -c "
           import json, sys
-          with open('$OUTPUT_FILE') as f:
+          with open(sys.argv[1]) as f:
               data = json.load(f)
           if isinstance(data, list):
               for msg in reversed(data):
@@ -159,7 +159,7 @@ jobs:
           elif isinstance(data, dict):
               if data.get('result'):
                   print(data['result'])
-          " 2>/dev/null || true)
+          " "$OUTPUT_FILE" 2>/dev/null || true)
           fi
 
           if [ -z "$REPORT" ]; then
