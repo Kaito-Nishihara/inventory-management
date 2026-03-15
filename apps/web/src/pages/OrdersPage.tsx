@@ -64,15 +64,30 @@ function OrdersPage({ isAdmin, onLogout, fetchOrders, fetchOrderById, changeOrde
     try {
       const result = await changeOrderStatus(orderId, nextStatus)
       if (!result.ok) {
+        // エラーメッセージは detailError で赤色表示する
         setDetailError(result.message)
         return
       }
+
+      // 一覧と詳細を再取得（メッセージをクリアしないよう直接 fetch する）
+      const [, detail] = await Promise.all([
+        fetchOrders().then((data) => {
+          setOrders(data)
+        }).catch(() => { /* 一覧再取得失敗は無視 */ }),
+        fetchOrderById(orderId).catch((err) => {
+          // ステータス変更は成功しているが詳細再取得に失敗した場合はユーザーに通知する
+          setDetailError(err instanceof Error ? err.message : "注文詳細の再取得に失敗しました。")
+          return null
+        }),
+      ])
+      if (detail) {
+        setSelectedOrder(detail)
+      }
       setActionMessage(result.message)
-      await Promise.all([loadOrders(), loadOrderDetail(orderId)])
     } finally {
       setIsStatusChanging(false)
     }
-  }, [changeOrderStatus, loadOrderDetail, loadOrders])
+  }, [changeOrderStatus, fetchOrders, fetchOrderById])
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
@@ -166,6 +181,12 @@ function OrdersPage({ isAdmin, onLogout, fetchOrders, fetchOrderById, changeOrde
           )}
 
           {detailStatus === "error" && detailError && (
+            <p className="mt-3 rounded-xl border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+              {detailError}
+            </p>
+          )}
+
+          {detailStatus === "success" && detailError && (
             <p className="mt-3 rounded-xl border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-200">
               {detailError}
             </p>

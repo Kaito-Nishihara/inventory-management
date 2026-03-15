@@ -7,6 +7,7 @@ import { getRoleFromJwt } from "../features/auth/tokenRole"
 import type { CartItem, CategoryResponse, ProductListResponse, ProductResponse } from "../features/catalog/types"
 import { mapValidationMessageFromResponse } from "../features/validation/messages"
 import type { CheckoutExecutionResult, CheckoutLineResult } from "../features/order/checkoutSummary"
+import { mapOrderStatusChangeError } from "../features/order/orderStatusTransitions"
 import type { OrderResponse } from "../features/order/types"
 import type {
   AuthAuditLogResponse,
@@ -121,7 +122,7 @@ function AppRouter() {
       url,
       init,
       accessToken: token,
-      fetchFn: fetch,
+      fetchFn: (...args: Parameters<typeof fetch>) => fetch(...args),
       refreshAccessToken,
       onAuthExpired: () => clearAuthSession("認証期限切れです。再ログインしてください。"),
     })
@@ -145,7 +146,7 @@ function AppRouter() {
     },
     [clearAuthSession, mapApiError],
   )
-  const readApiErrorCode = useCallback(async (response: Response): Promise<string | null> => {
+  const readApiErrorCode = useCallback(async (response: Response): Promise<string | undefined> => {
     try {
       const payload = (await response.clone().json()) as { code?: unknown }
       if (typeof payload.code === "string" && payload.code.length > 0) {
@@ -157,30 +158,22 @@ function AppRouter() {
 
     try {
       const text = (await response.clone().text()).replaceAll('"', "").trim()
-      return text.length > 0 ? text : null
+      return text.length > 0 ? text : undefined
     } catch {
-      return null
+      return undefined
     }
   }, [])
   const isAdmin = useMemo(() => getRoleFromJwt(token) === "admin", [token])
 
   const fetchCategories = useCallback(async (): Promise<CategoryResponse[]> => {
-    if (!token) {
-      throw new Error("JWT がありません。再ログインしてください。")
-    }
-
-    const response = await authorizedFetch(`${catalogBaseUrl}/categories`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
+    const response = await authorizedFetch(`${catalogBaseUrl}/categories`)
 
     if (!response.ok) {
       throw new Error(await mapApiErrorResponse(response))
     }
 
     return (await response.json()) as CategoryResponse[]
-  }, [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token])
+  }, [authorizedFetch, catalogBaseUrl, mapApiErrorResponse])
 
   const fetchProductsPage = useCallback(
     async (query: {
@@ -190,10 +183,6 @@ function AppRouter() {
       page: number
       pageSize: number
     }): Promise<ProductListResponse> => {
-      if (!token) {
-        throw new Error("JWT がありません。再ログインしてください。")
-      }
-
       const params = new URLSearchParams()
       params.set("page", String(query.page))
       params.set("pageSize", String(query.pageSize))
@@ -201,11 +190,7 @@ function AppRouter() {
       if (query.categoryId) params.set("categoryId", query.categoryId)
       if (query.sort) params.set("sort", query.sort)
 
-      const response = await authorizedFetch(`${catalogBaseUrl}/products?${params.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authorizedFetch(`${catalogBaseUrl}/products?${params.toString()}`)
 
       if (!response.ok) {
         throw new Error(await mapApiErrorResponse(response))
@@ -213,16 +198,12 @@ function AppRouter() {
 
       return (await response.json()) as ProductListResponse
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse],
   )
 
   const loadProductById = useCallback(
-    async (productId: string, accessToken: string) => {
-      const response = await authorizedFetch(`${catalogBaseUrl}/products/${productId}`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
+    async (productId: string) => {
+      const response = await authorizedFetch(`${catalogBaseUrl}/products/${productId}`)
 
       if (!response.ok) {
         throw new Error(await mapApiErrorResponse(response))
@@ -241,10 +222,6 @@ function AppRouter() {
       page: number
       pageSize: number
     }): Promise<ProductListResponse> => {
-      if (!token) {
-        throw new Error("JWT がありません。再ログインしてください。")
-      }
-
       const params = new URLSearchParams()
       params.set("page", String(query.page))
       params.set("pageSize", String(query.pageSize))
@@ -252,11 +229,7 @@ function AppRouter() {
       if (query.categoryId) params.set("categoryId", query.categoryId)
       if (query.sort) params.set("sort", query.sort)
 
-      const response = await authorizedFetch(`${catalogBaseUrl}/admin/products?${params.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authorizedFetch(`${catalogBaseUrl}/admin/products?${params.toString()}`)
 
       if (!response.ok) {
         throw new Error(await mapApiErrorResponse(response))
@@ -264,7 +237,7 @@ function AppRouter() {
 
       return (await response.json()) as ProductListResponse
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse],
   )
 
   const createAdminProduct = useCallback(
@@ -274,16 +247,9 @@ function AppRouter() {
       description: string
       price: number
     }): Promise<{ ok: boolean; code?: string; message: string; productId?: string }> => {
-      if (!token) {
-        return { ok: false, message: "JWT がありません。再ログインしてください。" }
-      }
-
       const response = await authorizedFetch(`${catalogBaseUrl}/admin/products`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       })
 
@@ -300,7 +266,7 @@ function AppRouter() {
       }
       return { ok: false, message: await mapApiErrorResponse(response) }
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse],
   )
 
   const updateAdminProduct = useCallback(
@@ -313,16 +279,9 @@ function AppRouter() {
         price: number
       },
     ): Promise<{ ok: boolean; code?: string; message: string }> => {
-      if (!token) {
-        return { ok: false, message: "JWT がありません。再ログインしてください。" }
-      }
-
       const response = await authorizedFetch(`${catalogBaseUrl}/admin/products/${productId}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       })
 
@@ -341,21 +300,14 @@ function AppRouter() {
       }
       return { ok: false, message: await mapApiErrorResponse(response) }
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse],
   )
 
   const setAdminProductPublish = useCallback(
     async (productId: string, isPublished: boolean): Promise<{ ok: boolean; code?: string; message: string }> => {
-      if (!token) {
-        return { ok: false, message: "JWT がありません。再ログインしてください。" }
-      }
-
       const response = await authorizedFetch(`${catalogBaseUrl}/admin/products/${productId}/publish`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isPublished }),
       })
 
@@ -371,38 +323,22 @@ function AppRouter() {
       }
       return { ok: false, message: await mapApiErrorResponse(response) }
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse],
   )
 
   const fetchStockLocations = useCallback(async (): Promise<StockLocationResponse[]> => {
-    if (!token) {
-      throw new Error("JWT がありません。再ログインしてください。")
-    }
-
-    const response = await authorizedFetch(`${catalogBaseUrl}/admin/inventory/locations`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
+    const response = await authorizedFetch(`${catalogBaseUrl}/admin/inventory/locations`)
 
     if (!response.ok) {
       throw new Error(await mapApiErrorResponse(response))
     }
 
     return (await response.json()) as StockLocationResponse[]
-  }, [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token])
+  }, [authorizedFetch, catalogBaseUrl, mapApiErrorResponse])
 
   const fetchLocationStocks = useCallback(
     async (productId: string): Promise<LocationInventoryStockResponse[]> => {
-      if (!token) {
-        throw new Error("JWT がありません。再ログインしてください。")
-      }
-
-      const response = await authorizedFetch(`${catalogBaseUrl}/admin/inventory/${productId}/location-stocks`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authorizedFetch(`${catalogBaseUrl}/admin/inventory/${productId}/location-stocks`)
 
       if (!response.ok) {
         throw new Error(await mapApiErrorResponse(response))
@@ -410,20 +346,12 @@ function AppRouter() {
 
       return (await response.json()) as LocationInventoryStockResponse[]
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse],
   )
 
   const fetchLocationTransfers = useCallback(
     async (productId: string, take = 10): Promise<LocationInventoryTransferResponse[]> => {
-      if (!token) {
-        throw new Error("JWT がありません。再ログインしてください。")
-      }
-
-      const response = await authorizedFetch(`${catalogBaseUrl}/admin/inventory/${productId}/transfers?take=${take}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authorizedFetch(`${catalogBaseUrl}/admin/inventory/${productId}/transfers?take=${take}`)
 
       if (!response.ok) {
         throw new Error(await mapApiErrorResponse(response))
@@ -431,7 +359,7 @@ function AppRouter() {
 
       return (await response.json()) as LocationInventoryTransferResponse[]
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse],
   )
 
   const createLocationTransfer = useCallback(
@@ -442,16 +370,9 @@ function AppRouter() {
       quantity: number
       note?: string
     }): Promise<{ ok: boolean; code?: string; message: string; transferId?: string }> => {
-      if (!token) {
-        return { ok: false, message: "JWT がありません。再ログインしてください。" }
-      }
-
       const response = await authorizedFetch(`${catalogBaseUrl}/admin/inventory/transfers`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           productId: draft.productId,
           fromLocationId: draft.fromLocationId,
@@ -485,20 +406,13 @@ function AppRouter() {
       }
       return { ok: false, code, message: await mapApiErrorResponse(response) }
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode],
   )
 
   const runTransferAction = useCallback(
     async (transferId: string, action: "ship" | "receive" | "cancel"): Promise<{ ok: boolean; code?: string; message: string }> => {
-      if (!token) {
-        return { ok: false, message: "JWT がありません。再ログインしてください。" }
-      }
-
       const response = await authorizedFetch(`${catalogBaseUrl}/admin/inventory/transfers/${transferId}/${action}`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       })
 
       if (response.ok) {
@@ -524,7 +438,7 @@ function AppRouter() {
 
       return { ok: false, code, message: await mapApiErrorResponse(response) }
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode],
   )
 
   const receiveInventory = useCallback(
@@ -534,16 +448,9 @@ function AppRouter() {
       expectedVersion: number
       note?: string
     }): Promise<InventoryOperationResult> => {
-      if (!token) {
-        return { ok: false, message: "JWT がありません。再ログインしてください。" }
-      }
-
       const response = await authorizedFetch(`${catalogBaseUrl}/admin/inventory/receive`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       })
 
@@ -563,7 +470,7 @@ function AppRouter() {
       }
       return { ok: false, code, message: await mapApiErrorResponse(response) }
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode],
   )
 
   const issueInventory = useCallback(
@@ -573,16 +480,9 @@ function AppRouter() {
       expectedVersion: number
       note?: string
     }): Promise<InventoryOperationResult> => {
-      if (!token) {
-        return { ok: false, message: "JWT がありません。再ログインしてください。" }
-      }
-
       const response = await authorizedFetch(`${catalogBaseUrl}/admin/inventory/issue`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       })
 
@@ -605,7 +505,7 @@ function AppRouter() {
       }
       return { ok: false, code, message: await mapApiErrorResponse(response) }
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode],
   )
 
   const adjustInventory = useCallback(
@@ -615,16 +515,9 @@ function AppRouter() {
       expectedVersion: number
       note?: string
     }): Promise<InventoryOperationResult> => {
-      if (!token) {
-        return { ok: false, message: "JWT がありません。再ログインしてください。" }
-      }
-
       const response = await authorizedFetch(`${catalogBaseUrl}/admin/inventory/adjust`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       })
 
@@ -648,7 +541,7 @@ function AppRouter() {
       }
       return { ok: false, code, message: await mapApiErrorResponse(response) }
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, readApiErrorCode],
   )
 
   const fetchTransactions = useCallback(
@@ -658,16 +551,8 @@ function AppRouter() {
       fromDate?: string,
       toDate?: string,
     ): Promise<InventoryTransactionResponse[]> => {
-      if (!token) {
-        throw new Error("JWT がありません。再ログインしてください。")
-      }
-
       const query = buildInventoryAuditQuery({ take, fromDate, toDate })
-      const response = await authorizedFetch(`${catalogBaseUrl}/admin/inventory/${productId}/transactions?${query}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authorizedFetch(`${catalogBaseUrl}/admin/inventory/${productId}/transactions?${query}`)
 
       if (!response.ok) {
         throw new Error(await mapApiErrorResponse(response))
@@ -675,21 +560,13 @@ function AppRouter() {
 
       return (await response.json()) as InventoryTransactionResponse[]
     },
-    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, catalogBaseUrl, mapApiErrorResponse],
   )
 
   const fetchAuthAuditLogs = useCallback(
     async (take = 50, fromDate?: string, toDate?: string): Promise<AuthAuditLogResponse[]> => {
-      if (!token) {
-        throw new Error("JWT がありません。再ログインしてください。")
-      }
-
       const query = buildInventoryAuditQuery({ take, fromDate, toDate })
-      const response = await authorizedFetch(`${identityBaseUrl}/admin/auth-audit-logs?${query}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authorizedFetch(`${identityBaseUrl}/admin/auth-audit-logs?${query}`)
 
       if (!response.ok) {
         throw new Error(await mapApiErrorResponse(response))
@@ -697,38 +574,22 @@ function AppRouter() {
 
       return (await response.json()) as AuthAuditLogResponse[]
     },
-    [authorizedFetch, identityBaseUrl, mapApiErrorResponse, token],
+    [authorizedFetch, identityBaseUrl, mapApiErrorResponse],
   )
 
   const fetchOrders = useCallback(async (): Promise<OrderResponse[]> => {
-    if (!token) {
-      throw new Error("JWT がありません。再ログインしてください。")
-    }
-
-    const response = await authorizedFetch(`${orderBaseUrl}/orders`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
+    const response = await authorizedFetch(`${orderBaseUrl}/orders`)
 
     if (!response.ok) {
       throw new Error(await mapApiErrorResponse(response))
     }
 
     return (await response.json()) as OrderResponse[]
-  }, [authorizedFetch, mapApiErrorResponse, orderBaseUrl, token])
+  }, [authorizedFetch, mapApiErrorResponse, orderBaseUrl])
 
   const fetchOrderById = useCallback(
     async (orderId: string): Promise<OrderResponse> => {
-      if (!token) {
-        throw new Error("JWT がありません。再ログインしてください。")
-      }
-
-      const response = await authorizedFetch(`${orderBaseUrl}/orders/${orderId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await authorizedFetch(`${orderBaseUrl}/orders/${orderId}`)
 
       if (!response.ok) {
         throw new Error(await mapApiErrorResponse(response))
@@ -736,7 +597,25 @@ function AppRouter() {
 
       return (await response.json()) as OrderResponse
     },
-    [authorizedFetch, mapApiErrorResponse, orderBaseUrl, token],
+    [authorizedFetch, mapApiErrorResponse, orderBaseUrl],
+  )
+
+  const changeOrderStatus = useCallback(
+    async (orderId: string, nextStatus: string): Promise<{ ok: boolean; message: string }> => {
+      const response = await authorizedFetch(`${orderBaseUrl}/admin/orders/${orderId}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nextStatus }),
+      })
+
+      if (!response.ok) {
+        const errorCode = await readApiErrorCode(response)
+        return { ok: false, message: mapOrderStatusChangeError(errorCode) }
+      }
+
+      return { ok: true, message: `注文ステータスを「${nextStatus}」へ更新しました。` }
+    },
+    [authorizedFetch, readApiErrorCode, orderBaseUrl],
   )
 
   const handleAddToCart = (product: ProductResponse) => {
@@ -782,13 +661,6 @@ function AppRouter() {
   }
 
   const handleCheckout = useCallback(async (targetProductIds?: string[]): Promise<CheckoutExecutionResult> => {
-    if (!token) {
-      return {
-        results: [],
-        message: "JWT がありません。再ログインしてください。",
-      }
-    }
-
     const targetItems = targetProductIds && targetProductIds.length > 0
       ? cartItems.filter((x) => targetProductIds.includes(x.productId))
       : cartItems
@@ -808,10 +680,7 @@ function AppRouter() {
       for (const item of targetItems) {
         const response = await authorizedFetch(`${orderBaseUrl}/orders`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ productId: item.productId, quantity: item.quantity }),
         })
 
@@ -857,7 +726,7 @@ function AppRouter() {
     } finally {
       setIsCheckoutLoading(false)
     }
-  }, [authorizedFetch, cartItems, mapApiErrorResponse, orderBaseUrl, token])
+  }, [authorizedFetch, cartItems, mapApiErrorResponse, orderBaseUrl])
 
   const handlePreset = (role: "admin" | "user") => {
     setEmail(role === "admin" ? ADMIN_EMAIL : USER_EMAIL)
@@ -981,7 +850,7 @@ function AppRouter() {
         path="/orders"
         element={
           token ? (
-            <OrdersPage isAdmin={isAdmin} onLogout={handleLogout} fetchOrders={fetchOrders} fetchOrderById={fetchOrderById} />
+            <OrdersPage isAdmin={isAdmin} onLogout={handleLogout} fetchOrders={fetchOrders} fetchOrderById={fetchOrderById} changeOrderStatus={changeOrderStatus} />
           ) : (
             <Navigate to="/login" replace />
           )
@@ -1077,7 +946,6 @@ function AppRouter() {
         element={
           token ? (
             <ProductDetailPage
-              token={token}
               onLogout={handleLogout}
               onAddToCart={handleAddToCart}
               fetchProductById={loadProductById}

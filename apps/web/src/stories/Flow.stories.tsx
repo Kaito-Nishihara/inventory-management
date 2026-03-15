@@ -210,7 +210,7 @@ function StoryFlowApp() {
         path="/products/:productId"
         element={
           token ? (
-            <ProductDetailPage token={token} onLogout={handleLogout} onAddToCart={handleAddToCart} fetchProductById={loadProductById} />
+            <ProductDetailPage onLogout={handleLogout} onAddToCart={handleAddToCart} fetchProductById={loadProductById} />
           ) : (
             <Navigate to="/login" replace />
           )
