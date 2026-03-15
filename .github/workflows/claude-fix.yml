@@ -83,7 +83,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           trigger_phrase: "/ai-fix"
-          claude_args: "--allowedTools Bash(git:*) Bash(dotnet:*) Bash(npm:*) --max-turns 30"
+          claude_args: "--allowedTools Edit Write Read Glob Grep 'Bash(git:*)' 'Bash(dotnet:*)' 'Bash(npm:*)' 'Bash(npx:*)' 'Bash(cd:*)' 'Bash(ls:*)' 'Bash(cat:*)' --max-turns 30"
           prompt: |
             あなたは10年以上の経験を持つシニアソフトウェアエンジニアです。
             このリポジトリは React + TypeScript + .NET 10 + PostgreSQL のマイクロサービス構成による在庫管理システムです。
