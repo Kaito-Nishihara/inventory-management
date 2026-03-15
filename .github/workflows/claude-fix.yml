@@ -54,10 +54,7 @@ jobs:
             --jq '[.[] | select(.body | startswith("## 🔍 CI 失敗分析")) | .body] | last // ""')
 
           # /ai-fix コメントから追加指示を抽出
-          FULL_COMMENT=$(cat <<'COMMENT_EOF'
-          ${{ github.event.comment.body }}
-          COMMENT_EOF
-          )
+          FULL_COMMENT="${{ github.event.comment.body }}"
           USER_INSTRUCTION=$(echo "$FULL_COMMENT" | sed 's|/ai-fix||' | xargs)
 
           {
@@ -83,7 +80,12 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           trigger_phrase: "/ai-fix"
-          claude_args: "--allowedTools Bash(git:*) Bash(dotnet:*) Bash(npm:*) --max-turns 30"
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Edit", "Write", "Read", "Glob", "Grep", "Bash(git:*)", "Bash(dotnet:*)", "Bash(npm:*)", "Bash(npx:*)"]
+              }
+            }
           prompt: |
             あなたは10年以上の経験を持つシニアソフトウェアエンジニアです。
             このリポジトリは React + TypeScript + .NET 10 + PostgreSQL のマイクロサービス構成による在庫管理システムです。
