@@ -42,6 +42,7 @@ jobs:
         id: context
         env:
           GH_TOKEN: ${{ github.token }}
+          FULL_COMMENT: ${{ github.event.comment.body }}
         run: |
           PR_NUMBER=${{ steps.pr.outputs.pr_number }}
 
@@ -54,7 +55,6 @@ jobs:
             --jq '[.[] | select(.body | startswith("## 🔍 CI 失敗分析")) | .body] | last // ""')
 
           # /ai-fix コメントから追加指示を抽出
-          FULL_COMMENT="${{ github.event.comment.body }}"
           USER_INSTRUCTION=$(echo "$FULL_COMMENT" | sed 's|/ai-fix||' | xargs)
 
           {
