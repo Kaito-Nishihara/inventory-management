@@ -75,7 +75,7 @@ jobs:
             echo "GHEOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: 変更ファイル一覧を取得
+      - name: 変更ファイル一覧と差分を取得
         id: files
         env:
           GH_TOKEN: ${{ github.token }}
@@ -84,6 +84,14 @@ jobs:
           {
             echo "changed_files<<GHEOF"
             echo "$FILES"
+            echo "GHEOF"
+          } >> "$GITHUB_OUTPUT"
+
+          # 差分（最大500行に制限）
+          DIFF=$(gh pr diff ${{ github.event.pull_request.number }} | head -500)
+          {
+            echo "diff<<GHEOF"
+            echo "$DIFF"
             echo "GHEOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -107,12 +115,18 @@ jobs:
             ## 変更ファイル一覧
             ${{ steps.files.outputs.changed_files }}
 
+            ## 差分（先頭500行）
+            ```diff
+            ${{ steps.files.outputs.diff }}
+            ```
+
             ## 関連 Issue の受け入れ条件
             ${{ steps.acceptance.outputs.criteria }}
 
             ## レビュー指示
 
-            以下の観点でレビューし、PR にレビューコメントを投稿してください。
+            以下の観点でレビューし、結果を出力してください。
+            ツールは使わず、提供された情報だけで分析してください。
 
             ### 1. 受け入れ条件チェック
             関連 Issue の受け入れ条件それぞれについて:
@@ -167,7 +181,7 @@ jobs:
 
             ---
             重要な注意:
-            - コードの差分を必ず読んでからレビューしてください
-            - 推測ではなく、実際の差分に基づいて判断してください
+            - ツールは使わないでください。この情報だけで分析してそのまま回答してください
+            - 推測ではなく、提供された差分と受け入れ条件に基づいて判断してください
             - 軽微な指摘（フォーマット、命名の好み）は省略してください
             - 実質的な問題のみ指摘してください
