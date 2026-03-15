@@ -51,8 +51,9 @@ export async function fetchWithAutoRefresh(options: FetchWithAutoRefreshOptions)
 }
 
 /**
- * テスト用: リフレッシュ状態をリセットする。
+ * テスト専用: リフレッシュ状態をリセットする。
+ * 本番コードから呼び出してはいけない。
  */
-export function resetRefreshState(): void {
+export function __TEST_ONLY__resetRefreshState(): void {
   refreshPromise = null
 }

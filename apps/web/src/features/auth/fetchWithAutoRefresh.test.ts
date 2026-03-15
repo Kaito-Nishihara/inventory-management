@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { fetchWithAutoRefresh, resetRefreshState } from "./fetchWithAutoRefresh"
+import { fetchWithAutoRefresh, __TEST_ONLY__resetRefreshState } from "./fetchWithAutoRefresh"
 
 afterEach(() => {
-  resetRefreshState()
+  __TEST_ONLY__resetRefreshState()
 })
 
 describe("fetchWithAutoRefresh", () => {
@@ -142,6 +142,60 @@ describe("fetchWithAutoRefresh", () => {
     expect(refreshAccessToken).toHaveBeenCalledTimes(1)
     // 各リクエストがそれぞれ onAuthExpired を呼ぶ
     expect(onAuthExpired).toHaveBeenCalledTimes(2)
+  })
+
+  it("リフレッシュ成功後のリトライも 401 を返した場合は onAuthExpired を呼ばず 401 をそのまま返す", async () => {
+    const fetchFn = vi.fn<typeof fetch>()
+    fetchFn
+      .mockResolvedValueOnce(new Response("", { status: 401 }))
+      .mockResolvedValueOnce(new Response("", { status: 401 }))
+    const onAuthExpired = vi.fn()
+
+    const response = await fetchWithAutoRefresh({
+      url: "http://localhost:5002/products",
+      accessToken: "old-token",
+      fetchFn,
+      refreshAccessToken: async () => "new-token",
+      onAuthExpired,
+    })
+
+    // リトライ結果をそのまま返す（無限ループしない）
+    expect(response.status).toBe(401)
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+    expect(onAuthExpired).not.toHaveBeenCalled()
+  })
+
+  it("refreshAccessToken が例外をスローした場合は finally でリフレッシュ状態をリセットして例外を伝播する", async () => {
+    const fetchFn = vi.fn<typeof fetch>()
+    fetchFn.mockResolvedValueOnce(new Response("", { status: 401 }))
+    const networkError = new Error("Network Error")
+
+    await expect(
+      fetchWithAutoRefresh({
+        url: "http://localhost:5002/products",
+        accessToken: "old-token",
+        fetchFn,
+        refreshAccessToken: async () => { throw networkError },
+        onAuthExpired: vi.fn(),
+      }),
+    ).rejects.toThrow("Network Error")
+
+    // finally が実行されてリフレッシュ状態がリセットされること（次のリクエストが再度リフレッシュを試みられる）
+    const fetchFn2 = vi.fn<typeof fetch>()
+    fetchFn2
+      .mockResolvedValueOnce(new Response("", { status: 401 }))
+      .mockResolvedValueOnce(new Response("", { status: 200 }))
+    const refreshAccessToken2 = vi.fn<() => Promise<string | null>>().mockResolvedValue("recovered-token")
+
+    const response = await fetchWithAutoRefresh({
+      url: "http://localhost:5002/products",
+      accessToken: "old-token",
+      fetchFn: fetchFn2,
+      refreshAccessToken: refreshAccessToken2,
+      onAuthExpired: vi.fn(),
+    })
+    expect(response.status).toBe(200)
+    expect(refreshAccessToken2).toHaveBeenCalledTimes(1)
   })
 
   it("200 の場合はリフレッシュせずにそのまま返す", async () => {
