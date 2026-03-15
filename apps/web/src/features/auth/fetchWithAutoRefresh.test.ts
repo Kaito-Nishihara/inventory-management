@@ -102,6 +102,11 @@ describe("fetchWithAutoRefresh", () => {
     expect((fetch1.mock.calls[1]?.[1]?.headers as Headers).get("Authorization")).toBe("Bearer refreshed-token")
     expect((fetch2.mock.calls[1]?.[1]?.headers as Headers).get("Authorization")).toBe("Bearer refreshed-token")
     expect((fetch3.mock.calls[1]?.[1]?.headers as Headers).get("Authorization")).toBe("Bearer refreshed-token")
+
+    // 各リクエストが元の URL でリトライされていること
+    expect(fetch1.mock.calls[1]?.[0]).toBe("http://localhost:5002/products")
+    expect(fetch2.mock.calls[1]?.[0]).toBe("http://localhost:5002/categories")
+    expect(fetch3.mock.calls[1]?.[0]).toBe("http://localhost:5002/orders")
   })
 
   it("並行リクエスト中に refresh が失敗した場合、全リクエストで onAuthExpired が呼ばれる", async () => {
@@ -163,6 +168,50 @@ describe("fetchWithAutoRefresh", () => {
     expect(response.status).toBe(401)
     expect(fetchFn).toHaveBeenCalledTimes(2)
     expect(onAuthExpired).not.toHaveBeenCalled()
+  })
+
+  it("並行リクエスト中に refreshAccessToken が例外をスローした場合、待機中のリクエストにも例外が伝播する", async () => {
+    const networkError = new Error("Network Error")
+    const refreshAccessToken = vi.fn<() => Promise<string | null>>()
+    refreshAccessToken.mockImplementation(
+      () => new Promise((_, reject) => setTimeout(() => reject(networkError), 50)),
+    )
+
+    const makeFetchFn = () => {
+      const fn = vi.fn<typeof fetch>()
+      fn.mockResolvedValueOnce(new Response("", { status: 401 }))
+      return fn
+    }
+
+    const fetch1 = makeFetchFn()
+    const fetch2 = makeFetchFn()
+
+    // 2つのリクエストを同時発行: 1つ目が refreshPromise をセット、2つ目が await で待機
+    const [result1, result2] = await Promise.allSettled([
+      fetchWithAutoRefresh({
+        url: "http://localhost:5002/products",
+        accessToken: "expired-token",
+        fetchFn: fetch1,
+        refreshAccessToken,
+        onAuthExpired: vi.fn(),
+      }),
+      fetchWithAutoRefresh({
+        url: "http://localhost:5002/categories",
+        accessToken: "expired-token",
+        fetchFn: fetch2,
+        refreshAccessToken,
+        onAuthExpired: vi.fn(),
+      }),
+    ])
+
+    // 両リクエストとも例外が伝播すること
+    expect(result1.status).toBe("rejected")
+    expect(result2.status).toBe("rejected")
+    expect((result1 as PromiseRejectedResult).reason).toBe(networkError)
+    expect((result2 as PromiseRejectedResult).reason).toBe(networkError)
+
+    // refresh は1回だけ呼ばれること（排他制御の検証）
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1)
   })
 
   it("refreshAccessToken が例外をスローした場合は finally でリフレッシュ状態をリセットして例外を伝播する", async () => {
