@@ -10,11 +10,10 @@ concurrency:
 
 jobs:
   review:
-    # Draft PR はスキップ
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       issues: read
       id-token: write
@@ -22,166 +21,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-
-      - name: 関連 Issue の受け入れ条件を取得
-        id: acceptance
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          PR_BODY="${{ github.event.pull_request.body }}"
-          PR_NUMBER=${{ github.event.pull_request.number }}
-
-          # PR 本文からリンクされた Issue 番号を抽出（#123 形式）
-          ISSUE_NUMBERS=$(echo "$PR_BODY" | grep -oP '#\d+' | grep -oP '\d+' | sort -u || true)
-
-          # 各 Issue の受け入れ条件を収集
-          ACCEPTANCE_CRITERIA=""
-          for ISSUE_NUM in $ISSUE_NUMBERS; do
-            ISSUE_BODY=$(gh issue view "$ISSUE_NUM" --json body --jq '.body' 2>/dev/null || true)
-            if [ -n "$ISSUE_BODY" ]; then
-              ACCEPTANCE_CRITERIA="${ACCEPTANCE_CRITERIA}
-          --- Issue #${ISSUE_NUM} ---
-          ${ISSUE_BODY}
-          "
-            fi
-          done
-
-          # PR に closes/fixes キーワードでリンクされた Issue も取得
-          LINKED_ISSUES=$(gh api graphql -f query='
-            query {
-              repository(owner: "${{ github.repository_owner }}", name: "${{ github.event.repository.name }}") {
-                pullRequest(number: '"$PR_NUMBER"') {
-                  closingIssuesReferences(first: 10) {
-                    nodes { number body }
-                  }
-                }
-              }
-            }' --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]? | "--- Issue #\(.number) ---\n\(.body)"' 2>/dev/null || true)
-
-          if [ -n "$LINKED_ISSUES" ]; then
-            ACCEPTANCE_CRITERIA="${ACCEPTANCE_CRITERIA}
-          ${LINKED_ISSUES}"
-          fi
-
-          if [ -z "$ACCEPTANCE_CRITERIA" ]; then
-            ACCEPTANCE_CRITERIA="（関連 Issue の受け入れ条件が見つかりませんでした）"
-          fi
-
-          # multiline output
-          {
-            echo "criteria<<GHEOF"
-            echo "$ACCEPTANCE_CRITERIA" | head -200
-            echo "GHEOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: 変更ファイル一覧と差分を取得
-        id: files
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          FILES=$(gh pr diff ${{ github.event.pull_request.number }} --name-only)
-          {
-            echo "changed_files<<GHEOF"
-            echo "$FILES"
-            echo "GHEOF"
-          } >> "$GITHUB_OUTPUT"
-
-          # 差分（最大500行に制限）
-          DIFF=$(gh pr diff ${{ github.event.pull_request.number }} | head -500)
-          {
-            echo "diff<<GHEOF"
-            echo "$DIFF"
-            echo "GHEOF"
-          } >> "$GITHUB_OUTPUT"
+          fetch-depth: 1
 
       - name: Claude でレビュー
-        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          use_bedrock: false
           prompt: |
-            あなたは経験豊富なシニアエンジニアです。
-            以下の PR をレビューしてください。
+            この PR をレビューしてください。
 
-            ## レビュー対象
-            - PR: #${{ github.event.pull_request.number }}
-            - タイトル: ${{ github.event.pull_request.title }}
-            - ブランチ: ${{ github.event.pull_request.head.ref }} → ${{ github.event.pull_request.base.ref }}
-
-            ## PR 本文
-            ${{ github.event.pull_request.body }}
-
-            ## 変更ファイル一覧
-            ${{ steps.files.outputs.changed_files }}
-
-            ## 差分（先頭500行）
-            ```diff
-            ${{ steps.files.outputs.diff }}
-            ```
-
-            ## 関連 Issue の受け入れ条件
-            ${{ steps.acceptance.outputs.criteria }}
-
-            ## レビュー指示
-
-            以下の観点でレビューし、結果を PR コメントとして投稿してください。
-            コードの読み取りにはツールを使って構いませんが、提供された差分と受け入れ条件を中心に分析してください。
-
-            ### 1. 受け入れ条件チェック
-            関連 Issue の受け入れ条件それぞれについて:
-            - ✅ 実装済み: 差分で確認できたもの
-            - ⚠️ 未確認: 差分からは判断できないもの
-            - ❌ 未実装: 明らかに不足しているもの
-
-            ### 2. コード品質
-            - null/undefined ガード不足
-            - エラーハンドリングの漏れ
-            - セキュリティリスク（認可チェック漏れ、インジェクション等）
-            - 型安全性の問題
-
-            ### 3. テストカバレッジ
-            - 変更に対応するテストがあるか
-            - 不足しているテスト観点
-            - エッジケースのカバー状況
-
-            ### 4. 危険な変更
-            - 破壊的変更の有無
-            - DB スキーマ変更の影響
-            - API 互換性
-
-            ### 5. リスク判定
-            変更全体のリスクを判定してください:
-            - 🟢 低リスク: 軽微な修正、テスト追加、リファクタリング
-            - 🟡 中リスク: 機能追加、既存ロジック変更
-            - 🔴 高リスク: 認証・認可変更、DB スキーマ変更、破壊的変更
-
-            ## 出力フォーマット
-
-            以下のフォーマットで PR コメントを投稿してください:
-
-            ## 🤖 AI レビュー
-
-            ### 受け入れ条件チェック
-            | 条件 | 状態 | 備考 |
-            |------|------|------|
-            | 条件1 | ✅/⚠️/❌ | 詳細 |
-
-            ### コード品質
-            （指摘事項があれば箇条書き。問題なければ「特に指摘なし」）
-
-            ### テストカバレッジ
-            （不足テスト観点があれば箇条書き）
-
-            ### リスク判定: 🟢/🟡/🔴
-            （理由を1〜2文で）
-
-            ### 総合コメント
-            （全体の所感を2〜3文で）
-
-            ---
-            重要な注意:
-            - 推測ではなく、提供された差分と受け入れ条件に基づいて判断してください
-            - 軽微な指摘（フォーマット、命名の好み）は省略してください
-            - 実質的な問題のみ指摘してください
+            以下の観点で確認し、結果をコメントしてください:
+            1. コード品質（null ガード、エラーハンドリング、型安全性）
+            2. テストカバレッジ（不足テスト観点）
+            3. 破壊的変更・セキュリティリスク
+            4. リスク判定（🟢低 / 🟡中 / 🔴高）
