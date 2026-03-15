@@ -145,7 +145,7 @@ function AppRouter() {
     },
     [clearAuthSession, mapApiError],
   )
-  const readApiErrorCode = useCallback(async (response: Response): Promise<string | null> => {
+  const readApiErrorCode = useCallback(async (response: Response): Promise<string | undefined> => {
     try {
       const payload = (await response.clone().json()) as { code?: unknown }
       if (typeof payload.code === "string" && payload.code.length > 0) {
@@ -157,9 +157,9 @@ function AppRouter() {
 
     try {
       const text = (await response.clone().text()).replaceAll('"', "").trim()
-      return text.length > 0 ? text : null
+      return text.length > 0 ? text : undefined
     } catch {
-      return null
+      return undefined
     }
   }, [])
   const isAdmin = useMemo(() => getRoleFromJwt(token) === "admin", [token])
@@ -599,6 +599,23 @@ function AppRouter() {
     [authorizedFetch, mapApiErrorResponse, orderBaseUrl],
   )
 
+  const changeOrderStatus = useCallback(
+    async (orderId: string, nextStatus: string): Promise<{ ok: boolean; message: string }> => {
+      const response = await authorizedFetch(`${orderBaseUrl}/orders/${orderId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      })
+
+      if (!response.ok) {
+        return { ok: false, message: await mapApiErrorResponse(response) }
+      }
+
+      return { ok: true, message: `注文ステータスを「${nextStatus}」へ更新しました。` }
+    },
+    [authorizedFetch, mapApiErrorResponse, orderBaseUrl],
+  )
+
   const handleAddToCart = (product: ProductResponse) => {
     setCartItems((prev) => {
       const existing = prev.find((x) => x.productId === product.id)
@@ -831,7 +848,7 @@ function AppRouter() {
         path="/orders"
         element={
           token ? (
-            <OrdersPage isAdmin={isAdmin} onLogout={handleLogout} fetchOrders={fetchOrders} fetchOrderById={fetchOrderById} />
+            <OrdersPage isAdmin={isAdmin} onLogout={handleLogout} fetchOrders={fetchOrders} fetchOrderById={fetchOrderById} changeOrderStatus={changeOrderStatus} />
           ) : (
             <Navigate to="/login" replace />
           )
