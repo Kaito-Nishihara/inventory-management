@@ -42,6 +42,7 @@ jobs:
         id: context
         env:
           GH_TOKEN: ${{ github.token }}
+          FULL_COMMENT: ${{ github.event.comment.body }}
         run: |
           PR_NUMBER=${{ steps.pr.outputs.pr_number }}
 
@@ -49,13 +50,22 @@ jobs:
           REVIEW_COMMENT=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
             --jq '[.[] | select(.body | startswith("## 🤖 AI レビュー")) | .body] | last // ""')
 
+          # CI 失敗分析コメントを取得
+          CI_ANALYSIS=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            --jq '[.[] | select(.body | startswith("## 🔍 CI 失敗分析")) | .body] | last // ""')
+
           # /ai-fix コメントから追加指示を抽出
-          FULL_COMMENT="${{ github.event.comment.body }}"
           USER_INSTRUCTION=$(echo "$FULL_COMMENT" | sed 's|/ai-fix||' | xargs)
 
           {
             echo "review<<GHEOF"
-            echo "$REVIEW_COMMENT" | head -150
+            echo "$REVIEW_COMMENT" | head -200
+            echo "GHEOF"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "ci_analysis<<GHEOF"
+            echo "$CI_ANALYSIS" | head -200
             echo "GHEOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -77,14 +87,95 @@ jobs:
               }
             }
           prompt: |
-            PR #${{ steps.pr.outputs.pr_number }} のレビュー指摘を修正してください。
-            CLAUDE.md を読んでリポジトリの構成を把握してください。
+            あなたは10年以上の経験を持つシニアソフトウェアエンジニアです。
+            このリポジトリは React + TypeScript + .NET 10 + PostgreSQL のマイクロサービス構成による在庫管理システムです。
 
-            ユーザー追加指示: ${{ steps.context.outputs.user_instruction }}
+            ## あなたのタスク
+            PR #${{ steps.pr.outputs.pr_number }} のレビュー指摘事項と CI 失敗を修正してください。
+            コードを修正し、修正内容をコミットしてプッシュしてください。
 
-            以下が AI レビューの指摘です。「コード品質」「テストカバレッジ」セクションの具体的指摘のみ修正してください。
-            大規模リファクタリングは避け、指摘事項に集中すること。
-            コミットメッセージとコード中コメントは日本語で書くこと。
-            修正後にコミット＆プッシュしてください。
+            ## ユーザーからの追加指示
+            ${{ steps.context.outputs.user_instruction }}
 
+            ## AI レビューの指摘事項
             ${{ steps.context.outputs.review }}
+
+            ## CI 失敗分析
+            ${{ steps.context.outputs.ci_analysis }}
+
+            ## 修正ルール
+            1. レビュー指摘の「コード品質」「テストカバレッジ」「危険な変更」セクションの具体的指摘を修正する
+            2. CI 失敗がある場合は、そのエラーを解消する修正を行う
+            3. ユーザーからの追加指示がある場合はそれも対応する
+            4. 修正はリポジトリの既存パターンに従うこと
+            5. コミットメッセージは日本語で書くこと（例: 「fix: AI レビュー指摘を修正 — null チェック追加」）
+            6. 不確実な修正は行わず、確実に改善できる箇所のみ修正する
+            7. 大規模なリファクタリングは避け、指摘事項に集中する
+            8. コード中のコメントは日本語で書くこと
+
+            ## 修正手順
+            1. まずリポジトリの構造とコードを確認する
+            2. 指摘事項を分析し、修正計画を立てる
+            3. コードを修正する
+            4. 可能であればテストを実行して確認する（dotnet test, npm run test:unit）
+            5. 修正内容をコミットしてプッシュする
+
+            ## 完了後
+            修正内容のサマリーを以下のフォーマットで出力してください:
+
+            ## 🔧 AI 自動修正レポート
+
+            ### 修正内容
+            - 修正した項目を箇条書き
+
+            ### 修正ファイル
+            - ファイルパスと変更概要
+
+            ### 未対応の指摘
+            - 自動修正できなかった指摘があれば記載（なければ「なし」）
+
+            ### テスト結果
+            - テスト実行結果（実行した場合）
+
+      - name: 修正レポートを PR にコメント
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER=${{ steps.pr.outputs.pr_number }}
+
+          REPORT=""
+          OUTPUT_FILE="/home/runner/work/_temp/claude-execution-output.json"
+          if [ -f "$OUTPUT_FILE" ]; then
+            REPORT=$(python3 -c "
+          import json, sys
+          with open('$OUTPUT_FILE') as f:
+              data = json.load(f)
+          if isinstance(data, list):
+              for msg in reversed(data):
+                  if msg.get('type') == 'result' and msg.get('result'):
+                      print(msg['result'])
+                      sys.exit(0)
+          elif isinstance(data, dict):
+              if data.get('result'):
+                  print(data['result'])
+          " 2>/dev/null || true)
+          fi
+
+          if [ -z "$REPORT" ]; then
+            REPORT="## 🔧 AI 自動修正レポート
+
+          修正を実行しましたが、レポートの取得に失敗しました。PR の差分を確認してください。"
+          fi
+
+          # 既存の修正レポートがあれば更新
+          EXISTING_COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            --jq '[.[] | select(.body | startswith("## 🔧 AI 自動修正レポート")) | .id] | last // empty')
+
+          if [ -n "$EXISTING_COMMENT_ID" ]; then
+            gh api "repos/${{ github.repository }}/issues/comments/${EXISTING_COMMENT_ID}" \
+              -X PATCH \
+              -f body="${REPORT}"
+          else
+            gh pr comment "${PR_NUMBER}" --body "${REPORT}"
+          fi
