@@ -70,6 +70,12 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           trigger_phrase: "/ai-fix"
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Edit", "Write", "Read", "Glob", "Grep", "Bash(git:*)", "Bash(dotnet:*)", "Bash(npm:*)", "Bash(npx:*)"]
+              }
+            }
           prompt: |
             PR #${{ steps.pr.outputs.pr_number }} のレビュー指摘を修正してください。
             CLAUDE.md を読んでリポジトリの構成を把握してください。
