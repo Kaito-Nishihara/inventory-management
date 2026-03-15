@@ -21,17 +21,161 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
+
+      - name: PR 差分と受け入れ条件を収集
+        id: collect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+
+          # 変更ファイル一覧
+          FILES=$(gh pr diff "${PR_NUMBER}" --name-only)
+          {
+            echo "changed_files<<GHEOF"
+            echo "$FILES"
+            echo "GHEOF"
+          } >> "$GITHUB_OUTPUT"
+
+          # 差分（最大500行）
+          DIFF=$(gh pr diff "${PR_NUMBER}" | head -500)
+          {
+            echo "diff<<GHEOF"
+            echo "$DIFF"
+            echo "GHEOF"
+          } >> "$GITHUB_OUTPUT"
+
+          # 関連 Issue の受け入れ条件を収集
+          PR_BODY=$(gh pr view "${PR_NUMBER}" --json body --jq '.body')
+          ISSUE_NUMBERS=$(echo "$PR_BODY" | grep -oP '#\d+' | grep -oP '\d+' | sort -u || true)
+
+          ACCEPTANCE_CRITERIA=""
+          for ISSUE_NUM in $ISSUE_NUMBERS; do
+            ISSUE_BODY=$(gh issue view "$ISSUE_NUM" --json body --jq '.body' 2>/dev/null || true)
+            if [ -n "$ISSUE_BODY" ]; then
+              ACCEPTANCE_CRITERIA="${ACCEPTANCE_CRITERIA}
+          --- Issue #${ISSUE_NUM} ---
+          ${ISSUE_BODY}
+          "
+            fi
+          done
+
+          # closes/fixes でリンクされた Issue も取得
+          LINKED_ISSUES=$(gh api graphql -f query='
+            query {
+              repository(owner: "${{ github.repository_owner }}", name: "${{ github.event.repository.name }}") {
+                pullRequest(number: '"$PR_NUMBER"') {
+                  closingIssuesReferences(first: 10) {
+                    nodes { number body }
+                  }
+                }
+              }
+            }' --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[]? | "--- Issue #\(.number) ---\n\(.body)"' 2>/dev/null || true)
+
+          if [ -n "$LINKED_ISSUES" ]; then
+            ACCEPTANCE_CRITERIA="${ACCEPTANCE_CRITERIA}
+          ${LINKED_ISSUES}"
+          fi
+
+          if [ -z "$ACCEPTANCE_CRITERIA" ]; then
+            ACCEPTANCE_CRITERIA="（関連 Issue の受け入れ条件が見つかりませんでした）"
+          fi
+
+          {
+            echo "criteria<<GHEOF"
+            echo "$ACCEPTANCE_CRITERIA" | head -200
+            echo "GHEOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Claude でレビュー
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
-            この PR をレビューしてください。
+            以下の PR をレビューしてください。
+            ツールは使わないでください。この情報だけで分析してそのまま回答してください。
 
-            以下の観点で確認し、結果をコメントしてください:
-            1. コード品質（null ガード、エラーハンドリング、型安全性）
-            2. テストカバレッジ（不足テスト観点）
-            3. 破壊的変更・セキュリティリスク
-            4. リスク判定（🟢低 / 🟡中 / 🔴高）
+            ## レビュー対象
+            - PR: #${{ github.event.pull_request.number }}
+            - タイトル: ${{ github.event.pull_request.title }}
+            - ブランチ: ${{ github.event.pull_request.head.ref }} → ${{ github.event.pull_request.base.ref }}
+
+            ## PR 本文
+            ${{ github.event.pull_request.body }}
+
+            ## 変更ファイル一覧
+            ${{ steps.collect.outputs.changed_files }}
+
+            ## 差分（先頭500行）
+            ```diff
+            ${{ steps.collect.outputs.diff }}
+            ```
+
+            ## 関連 Issue の受け入れ条件
+            ${{ steps.collect.outputs.criteria }}
+
+            ---
+            以下のフォーマットで回答してください:
+
+            ## 🤖 AI レビュー
+
+            ### 受け入れ条件チェック
+            | 条件 | 状態 | 備考 |
+            |------|------|------|
+            | 条件の内容 | ✅/⚠️/❌ | 詳細 |
+
+            ### コード品質
+            - 指摘事項があれば箇条書き（問題なければ「特に指摘なし」）
+
+            ### テストカバレッジ
+            - 不足テスト観点があれば箇条書き
+
+            ### リスク判定: 🟢/🟡/🔴
+            理由を1〜2文で
+
+            ### 総合コメント
+            全体の所感を2〜3文で
+
+      - name: PR にレビューコメントを投稿
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+
+          # Claude の実行結果ファイルからレビュー内容を取得
+          REVIEW=""
+          OUTPUT_FILE="/home/runner/work/_temp/claude-execution-output.json"
+          if [ -f "$OUTPUT_FILE" ]; then
+            REVIEW=$(python3 -c "
+          import json, sys
+          with open('$OUTPUT_FILE') as f:
+              data = json.load(f)
+          if isinstance(data, list):
+              for msg in reversed(data):
+                  if msg.get('type') == 'result' and msg.get('result'):
+                      print(msg['result'])
+                      sys.exit(0)
+          elif isinstance(data, dict):
+              if data.get('result'):
+                  print(data['result'])
+          " 2>/dev/null || true)
+          fi
+
+          if [ -z "$REVIEW" ]; then
+            REVIEW="## 🤖 AI レビュー
+
+          レビューを実行しましたが、結果の取得に失敗しました。"
+          fi
+
+          # 既存の AI レビューコメントを探して更新、なければ新規作成
+          EXISTING_COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            --jq '[.[] | select(.body | startswith("## 🤖 AI レビュー")) | .id] | last // empty')
+
+          if [ -n "$EXISTING_COMMENT_ID" ]; then
+            gh api "repos/${{ github.repository }}/issues/comments/${EXISTING_COMMENT_ID}" \
+              -X PATCH \
+              -f body="${REVIEW}"
+          else
+            gh pr comment "${PR_NUMBER}" --body "${REVIEW}"
+          fi
