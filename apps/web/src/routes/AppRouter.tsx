@@ -122,7 +122,7 @@ function AppRouter() {
       url,
       init,
       accessToken: token,
-      fetchFn: fetch,
+      fetchFn: (...args: Parameters<typeof fetch>) => fetch(...args),
       refreshAccessToken,
       onAuthExpired: () => clearAuthSession("認証期限切れです。再ログインしてください。"),
     })
@@ -605,7 +605,7 @@ function AppRouter() {
       const response = await authorizedFetch(`${orderBaseUrl}/admin/orders/${orderId}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({ nextStatus }),
       })
 
       if (!response.ok) {

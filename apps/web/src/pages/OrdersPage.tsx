@@ -64,15 +64,25 @@ function OrdersPage({ isAdmin, onLogout, fetchOrders, fetchOrderById, changeOrde
     try {
       const result = await changeOrderStatus(orderId, nextStatus)
       if (!result.ok) {
-        setDetailError(result.message)
+        setActionMessage(result.message)
         return
       }
+
+      // 一覧と詳細を再取得（メッセージをクリアしないよう直接 fetch する）
+      const [, detail] = await Promise.all([
+        fetchOrders().then((data) => {
+          setOrders(data)
+        }).catch(() => { /* 一覧再取得失敗は無視 */ }),
+        fetchOrderById(orderId).catch(() => null),
+      ])
+      if (detail) {
+        setSelectedOrder(detail)
+      }
       setActionMessage(result.message)
-      await Promise.all([loadOrders(), loadOrderDetail(orderId)])
     } finally {
       setIsStatusChanging(false)
     }
-  }, [changeOrderStatus, loadOrderDetail, loadOrders])
+  }, [changeOrderStatus, fetchOrders, fetchOrderById])
 
   useEffect(() => {
     const timerId = window.setTimeout(() => {
