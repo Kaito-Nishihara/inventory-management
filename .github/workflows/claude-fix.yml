@@ -145,7 +145,7 @@ jobs:
           PR_NUMBER=${{ steps.pr.outputs.pr_number }}
 
           REPORT=""
-          OUTPUT_FILE="/home/runner/work/_temp/claude-execution-output.json"
+          OUTPUT_FILE="${RUNNER_TEMP}/claude-execution-output.json"
           if [ -f "$OUTPUT_FILE" ]; then
             REPORT=$(python3 -c "
           import json, sys
@@ -173,9 +173,9 @@ jobs:
             --jq '[.[] | select(.body | startswith("## 🔧 AI 自動修正レポート")) | .id] | last // empty')
 
           if [ -n "$EXISTING_COMMENT_ID" ]; then
-            gh api "repos/${{ github.repository }}/issues/comments/${EXISTING_COMMENT_ID}" \
-              -X PATCH \
-              -f body="${REPORT}"
+            jq -n --arg body "$REPORT" '{"body": $body}' | \
+              gh api "repos/${{ github.repository }}/issues/comments/${EXISTING_COMMENT_ID}" \
+              -X PATCH --input -
           else
-            gh pr comment "${PR_NUMBER}" --body "${REPORT}"
+            echo "$REPORT" | gh pr comment "${PR_NUMBER}" --body-file -
           fi
