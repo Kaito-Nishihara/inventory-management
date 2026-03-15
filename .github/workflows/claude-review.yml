@@ -14,7 +14,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: read
       id-token: write
@@ -126,8 +126,8 @@ jobs:
 
             ## レビュー指示
 
-            以下の観点でレビューし、結果を出力してください。
-            ツールは使わず、提供された情報だけで分析してください。
+            以下の観点でレビューし、結果を PR コメントとして投稿してください。
+            コードの読み取りにはツールを使って構いませんが、提供された差分と受け入れ条件を中心に分析してください。
 
             ### 1. 受け入れ条件チェック
             関連 Issue の受け入れ条件それぞれについて:
@@ -182,44 +182,6 @@ jobs:
 
             ---
             重要な注意:
-            - ツールは使わないでください。この情報だけで分析してそのまま回答してください
             - 推測ではなく、提供された差分と受け入れ条件に基づいて判断してください
             - 軽微な指摘（フォーマット、命名の好み）は省略してください
             - 実質的な問題のみ指摘してください
-
-      - name: レビュー結果を PR に投稿
-        if: always() && steps.claude.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Claude の出力を抽出
-          OUTPUT_FILE="/home/runner/work/_temp/claude-execution-output.json"
-          if [ ! -f "$OUTPUT_FILE" ]; then
-            echo "claude-execution-output.json が見つかりません"
-            exit 0
-          fi
-
-          # result の出力を取得
-          REVIEW=$(cat "$OUTPUT_FILE" | node -e "
-            const fs = require('fs');
-            const data = fs.readFileSync('/dev/stdin', 'utf8');
-            const lines = data.trim().split('\n');
-            for (const line of lines) {
-              try {
-                const obj = JSON.parse(line);
-                if (obj.type === 'result' && obj.result) {
-                  process.stdout.write(obj.result);
-                  process.exit(0);
-                }
-              } catch {}
-            }
-            process.exit(1);
-          " 2>/dev/null) || true
-
-          if [ -z "$REVIEW" ]; then
-            echo "レビュー結果が空です"
-            exit 0
-          fi
-
-          # PR にコメント投稿
-          gh pr comment ${{ github.event.pull_request.number }} --body "$REVIEW"
