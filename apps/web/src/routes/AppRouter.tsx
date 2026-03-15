@@ -7,6 +7,7 @@ import { getRoleFromJwt } from "../features/auth/tokenRole"
 import type { CartItem, CategoryResponse, ProductListResponse, ProductResponse } from "../features/catalog/types"
 import { mapValidationMessageFromResponse } from "../features/validation/messages"
 import type { CheckoutExecutionResult, CheckoutLineResult } from "../features/order/checkoutSummary"
+import { mapOrderStatusChangeError } from "../features/order/orderStatusTransitions"
 import type { OrderResponse } from "../features/order/types"
 import type {
   AuthAuditLogResponse,
@@ -601,19 +602,20 @@ function AppRouter() {
 
   const changeOrderStatus = useCallback(
     async (orderId: string, nextStatus: string): Promise<{ ok: boolean; message: string }> => {
-      const response = await authorizedFetch(`${orderBaseUrl}/orders/${orderId}/status`, {
-        method: "PATCH",
+      const response = await authorizedFetch(`${orderBaseUrl}/admin/orders/${orderId}/status`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: nextStatus }),
       })
 
       if (!response.ok) {
-        return { ok: false, message: await mapApiErrorResponse(response) }
+        const errorCode = await readApiErrorCode(response)
+        return { ok: false, message: mapOrderStatusChangeError(errorCode) }
       }
 
       return { ok: true, message: `注文ステータスを「${nextStatus}」へ更新しました。` }
     },
-    [authorizedFetch, mapApiErrorResponse, orderBaseUrl],
+    [authorizedFetch, readApiErrorCode, orderBaseUrl],
   )
 
   const handleAddToCart = (product: ProductResponse) => {
